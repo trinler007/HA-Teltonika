@@ -13,17 +13,38 @@ und ergänzt insbesondere Funktionen für den Teltonika RUTX50 mit RutOS 7.24.x.
 - alle Sensoren der offiziellen Core-Integration
 - GPS-Position als `device_tracker` für die Home-Assistant-Karte
 - GPS-Sensoren für Breiten- und Längengrad, Höhe, Satelliten, HDOP,
-  Geschwindigkeit und Kurs
+  Satellitenfix, Geschwindigkeit und Kurs
+- Entfernung zur konfigurierbaren Heimatposition sowie sechsstelliger
+  Maidenhead-Locator
 - Primärband sowie alle aktiven Carrier-Aggregation-Bänder mit Signaldetails
+- IMEI, UICC/ICCID und Mobilfunk-Registrierungsstatus
 - aktive physische SIM als Sensor und auswählbare `select`-Entität
 - aktives eSIM-Profil als Sensor und auswählbare `select`-Entität auf
   RUTX50-eSIM-Hardware
 - aktive Internetverbindung aus Multi-WAN/Failover einschließlich Typ, IP,
   Modem und SIM als Attribute
+- aktuelle WAN-IP-Adresse, Router-Firmware und Betriebszeit
 - DHCP-Erkennung, Reauthentifizierung und URL-Behandlung der Core-Integration
 
 Nicht unterstützte optionale Endpunkte (GPS, Failover oder eSIM) werden
 automatisch erkannt und beeinträchtigen die übrigen Entitäten nicht.
+
+## Heimatposition und HAM-Locator
+
+Der Sensor **Entfernung nach Hause** verwendet standardmäßig die in Home
+Assistant konfigurierte Heimatposition. Über
+**Einstellungen → Geräte & Dienste → Teltonika → Konfigurieren** können
+Breiten- und Längengrad je Router überschrieben werden. Die Entfernung wird als
+Großkreisentfernung nach der Haversine-Formel in Kilometern berechnet.
+
+Der **Maidenhead-Locator** wird als sechsstelliger Locator aus der aktuellen
+GPS-Position berechnet. Solange der Router keinen Satellitenfix meldet, bleiben
+beide berechneten Sensoren unbekannt, damit die vom Router gelieferten
+Nullkoordinaten nicht als echte Position interpretiert werden.
+
+IMEI und UICC/ICCID sind eindeutige Geräte- beziehungsweise
+Teilnehmerkennungen. Bei der Weitergabe von Screenshots oder Diagnosedaten
+sollten diese Werte anonymisiert werden.
 
 ## Installation
 

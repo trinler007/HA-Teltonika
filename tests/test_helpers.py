@@ -27,6 +27,50 @@ class ConversionTests(unittest.TestCase):
         self.assertIsNone(HELPERS.as_int(None))
 
 
+class LocationTests(unittest.TestCase):
+    """Test calculated location helpers."""
+
+    def test_distance_uses_great_circle(self) -> None:
+        self.assertAlmostEqual(
+            HELPERS.distance_km(0, 0, 0, 1),
+            111.195,
+            places=3,
+        )
+        self.assertEqual(
+            HELPERS.distance_km(47.72368, 10.305336, 47.72368, 10.305336),
+            0,
+        )
+
+    def test_invalid_distance_coordinates(self) -> None:
+        self.assertIsNone(HELPERS.distance_km(91, 0, 0, 0))
+        self.assertIsNone(HELPERS.distance_km("unknown", 0, 0, 0))
+
+    def test_maidenhead_locator(self) -> None:
+        self.assertEqual(
+            HELPERS.maidenhead_locator(47.72368, 10.305336),
+            "JN57dr",
+        )
+        self.assertEqual(HELPERS.maidenhead_locator(-90, -180), "AA00aa")
+        self.assertEqual(HELPERS.maidenhead_locator(90, 180), "RR99xx")
+        self.assertIsNone(HELPERS.maidenhead_locator(-91, 0))
+
+
+class InterfaceTests(unittest.TestCase):
+    """Test interface value extraction."""
+
+    def test_primary_ip_without_prefix(self) -> None:
+        self.assertEqual(
+            HELPERS.interface_ip_address({"ipaddrs": ["10.20.30.40/32"]}),
+            "10.20.30.40",
+        )
+        self.assertEqual(
+            HELPERS.interface_ip_address(
+                {"ipv4-address": [{"address": "192.0.2.5", "mask": 24}]}
+            ),
+            "192.0.2.5",
+        )
+
+
 class ActiveWanTests(unittest.TestCase):
     """Test active Internet interface selection."""
 

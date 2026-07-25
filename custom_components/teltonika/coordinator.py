@@ -35,6 +35,7 @@ class TeltonikaData:
     interfaces: list[dict[str, Any]] = field(default_factory=list)
     failover: dict[str, dict[str, Any]] = field(default_factory=dict)
     esim_profiles: list[dict[str, Any]] = field(default_factory=list)
+    system_usage: dict[str, Any] = field(default_factory=dict)
 
 
 class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
@@ -59,6 +60,7 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         )
         self.client = client
         self.base_url = base_url
+        self.firmware_version: str | None = None
 
     @override
     async def _async_setup(self) -> None:
@@ -88,6 +90,7 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             serial_number=system_info_response.mnf_info.serial,
             configuration_url=self.base_url,
         )
+        self.firmware_version = system_info_response.static.fw_version
 
     async def _async_optional_data(self, endpoint: str) -> Any:
         """Return data from an optional endpoint, or None when unsupported."""
@@ -121,11 +124,18 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
                 )
                 raise UpdateFailed(error_message)
 
-            gps, interfaces, failover, esim_profiles = await asyncio.gather(
+            (
+                gps,
+                interfaces,
+                failover,
+                esim_profiles,
+                system_usage,
+            ) = await asyncio.gather(
                 self._async_optional_data("gps/position/status"),
                 self._async_optional_data("interfaces/status"),
                 self._async_optional_data("failover/status"),
                 self._async_optional_data("esim/config"),
+                self._async_optional_data("system/device/usage/status"),
             )
         except TeltonikaAuthenticationError as err:
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
@@ -142,6 +152,7 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             interfaces=interfaces if isinstance(interfaces, list) else [],
             failover=failover if isinstance(failover, dict) else {},
             esim_profiles=esim_profiles if isinstance(esim_profiles, list) else [],
+            system_usage=system_usage if isinstance(system_usage, dict) else {},
         )
 
     async def async_select_sim(self, modem_id: str, sim: int) -> None:

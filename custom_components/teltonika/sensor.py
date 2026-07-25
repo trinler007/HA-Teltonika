@@ -19,16 +19,25 @@ from homeassistant.const import (
     UnitOfLength,
     UnitOfSpeed,
     UnitOfTemperature,
+    UnitOfTime,
 )
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from teltasync.modems import ModemStatusFull
 
 from . import TeltonikaConfigEntry
+from .const import CONF_HOME_LATITUDE, CONF_HOME_LONGITUDE
 from .coordinator import TeltonikaDataUpdateCoordinator
-from .helpers import as_float, as_int
+from .helpers import (
+    as_float,
+    as_int,
+    distance_km,
+    interface_ip_address,
+    maidenhead_locator,
+)
 
 PARALLEL_UPDATES = 0
 
@@ -127,6 +136,23 @@ MODEM_SENSORS: tuple[TeltonikaModemSensorDescription, ...] = (
         translation_key="esim_profile",
         value_fn=lambda modem: modem.esim_profile,
     ),
+    TeltonikaModemSensorDescription(
+        key="imei",
+        translation_key="imei",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda modem: modem.imei,
+    ),
+    TeltonikaModemSensorDescription(
+        key="registration_status",
+        translation_key="registration_status",
+        value_fn=lambda modem: modem.operator_state,
+    ),
+    TeltonikaModemSensorDescription(
+        key="uicc",
+        translation_key="uicc",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda modem: modem.iccid,
+    ),
 )
 
 
@@ -193,6 +219,11 @@ GPS_SENSORS: tuple[TeltonikaGpsSensorDescription, ...] = (
         suggested_display_precision=1,
         value_fn=lambda gps: as_float(gps.get("angle")),
     ),
+    TeltonikaGpsSensorDescription(
+        key="gps_fix_status",
+        translation_key="gps_fix_status",
+        value_fn=lambda gps: as_int(gps.get("fix_status")),
+    ),
 )
 
 
@@ -221,7 +252,16 @@ async def async_setup_entry(
                 TeltonikaGpsSensor(coordinator, description)
                 for description in GPS_SENSORS
             )
-            entities.append(TeltonikaActiveWanSensor(coordinator))
+            entities.extend(
+                (
+                    TeltonikaActiveWanSensor(coordinator),
+                    TeltonikaWanIpSensor(coordinator),
+                    TeltonikaHomeDistanceSensor(coordinator),
+                    TeltonikaMaidenheadLocatorSensor(coordinator),
+                    TeltonikaFirmwareSensor(coordinator),
+                    TeltonikaUptimeSensor(coordinator),
+                )
+            )
             globals_added = True
         if entities:
             async_add_entities(entities)
@@ -385,3 +425,138 @@ class TeltonikaActiveWanSensor(TeltonikaBaseSensor):
             ),
             "failover_status": primary.get("failover_status"),
         }
+
+
+class TeltonikaWanIpSensor(TeltonikaBaseSensor):
+    """Sensor showing the current IP address of the active WAN interface."""
+
+    _attr_translation_key = "wan_ip_address"
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        """Initialize the WAN IP sensor."""
+        super().__init__(coordinator, "wan_ip_address")
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        """Return the current primary WAN IPv4 address."""
+        interfaces = self.coordinator.active_wan_interfaces()
+        return interface_ip_address(interfaces[0]) if interfaces else None
+
+    @property
+    @override
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Return identifying details of the active WAN interface."""
+        interfaces = self.coordinator.active_wan_interfaces()
+        if not interfaces:
+            return None
+        primary = interfaces[0]
+        return {
+            "interface": primary.get("interface") or primary.get("id"),
+            "device": primary.get("device") or primary.get("ifname"),
+            "network_type": primary.get("network_type"),
+        }
+
+
+class TeltonikaHomeDistanceSensor(TeltonikaBaseSensor):
+    """Distance between the router and the configured home position."""
+
+    _attr_translation_key = "distance_from_home"
+    _attr_device_class = SensorDeviceClass.DISTANCE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfLength.KILOMETERS
+    _attr_suggested_display_precision = 2
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        """Initialize the distance sensor."""
+        super().__init__(coordinator, "distance_from_home")
+
+    @property
+    @override
+    def available(self) -> bool:
+        """Return whether GPS coordinates are available."""
+        return super().available and self.coordinator.data.gps is not None
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        """Return distance from the configured home position in kilometers."""
+        gps = self.coordinator.data.gps or {}
+        if as_int(gps.get("fix_status")) == 0:
+            return None
+        assert self.coordinator.config_entry is not None
+        options = self.coordinator.config_entry.options
+        return distance_km(
+            gps.get("latitude"),
+            gps.get("longitude"),
+            options.get(CONF_HOME_LATITUDE, self.coordinator.hass.config.latitude),
+            options.get(CONF_HOME_LONGITUDE, self.coordinator.hass.config.longitude),
+        )
+
+
+class TeltonikaMaidenheadLocatorSensor(TeltonikaBaseSensor):
+    """Six-character Maidenhead locator calculated from GPS coordinates."""
+
+    _attr_translation_key = "maidenhead_locator"
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        """Initialize the Maidenhead locator sensor."""
+        super().__init__(coordinator, "maidenhead_locator")
+
+    @property
+    @override
+    def available(self) -> bool:
+        """Return whether GPS coordinates are available."""
+        return super().available and self.coordinator.data.gps is not None
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        """Return the current six-character Maidenhead locator."""
+        gps = self.coordinator.data.gps or {}
+        if as_int(gps.get("fix_status")) == 0:
+            return None
+        return maidenhead_locator(gps.get("latitude"), gps.get("longitude"))
+
+
+class TeltonikaFirmwareSensor(TeltonikaBaseSensor):
+    """Router firmware version sensor."""
+
+    _attr_translation_key = "firmware_version"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        """Initialize the firmware sensor."""
+        super().__init__(coordinator, "firmware_version")
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        """Return the installed router firmware version."""
+        return self.coordinator.firmware_version
+
+
+class TeltonikaUptimeSensor(TeltonikaBaseSensor):
+    """Router uptime sensor."""
+
+    _attr_translation_key = "uptime"
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_native_unit_of_measurement = UnitOfTime.SECONDS
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        """Initialize the uptime sensor."""
+        super().__init__(coordinator, "uptime")
+
+    @property
+    @override
+    def available(self) -> bool:
+        """Return whether system usage data is available."""
+        return super().available and bool(self.coordinator.data.system_usage)
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        """Return router uptime in seconds."""
+        return as_int(self.coordinator.data.system_usage.get("uptime_seconds"))

@@ -39,6 +39,22 @@
       }
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "home_latitude": "Breitengrad der Heimatposition",
+          "home_longitude": "Längengrad der Heimatposition"
+        },
+        "data_description": {
+          "home_latitude": "Breitengrad zur Berechnung der Entfernung nach Hause. Standardmäßig wird die Heimatposition von Home Assistant verwendet.",
+          "home_longitude": "Längengrad zur Berechnung der Entfernung nach Hause. Standardmäßig wird die Heimatposition von Home Assistant verwendet."
+        },
+        "description": "Konfiguriere die Heimatposition für den berechneten GPS-Entfernungssensor.",
+        "title": "GPS-Heimatposition"
+      }
+    }
+  },
   "entity": {
     "device_tracker": {
       "gps_location": {
@@ -72,6 +88,9 @@
       "esim_profile": {
         "name": "{modem_name} eSIM-Profil"
       },
+      "firmware_version": {
+        "name": "Firmware-Version"
+      },
       "gps_accuracy": {
         "name": "GPS-Genauigkeit (HDOP)"
       },
@@ -80,6 +99,9 @@
       },
       "gps_course": {
         "name": "GPS-Kurs"
+      },
+      "gps_fix_status": {
+        "name": "GPS-Satellitenfix"
       },
       "gps_latitude": {
         "name": "GPS-Breitengrad"
@@ -93,8 +115,20 @@
       "gps_speed": {
         "name": "GPS-Geschwindigkeit"
       },
+      "distance_from_home": {
+        "name": "Entfernung nach Hause"
+      },
+      "imei": {
+        "name": "{modem_name} IMEI"
+      },
+      "maidenhead_locator": {
+        "name": "Maidenhead-Locator"
+      },
       "operator": {
         "name": "{modem_name} Netzbetreiber"
+      },
+      "registration_status": {
+        "name": "{modem_name} Registrierungsstatus"
       },
       "rsrp": {
         "name": "{modem_name} RSRP"
@@ -107,6 +141,15 @@
       },
       "sinr": {
         "name": "{modem_name} SINR"
+      },
+      "uicc": {
+        "name": "{modem_name} UICC (ICCID)"
+      },
+      "uptime": {
+        "name": "Betriebszeit"
+      },
+      "wan_ip_address": {
+        "name": "WAN-IP-Adresse"
       }
     }
   }
