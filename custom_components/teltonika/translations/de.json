@@ -1,0 +1,113 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Gerät ist bereits konfiguriert",
+      "reauth_successful": "Die erneute Authentifizierung war erfolgreich",
+      "wrong_account": "Das Gerät stimmt nicht mit der vorhandenen Konfiguration überein."
+    },
+    "error": {
+      "cannot_connect": "Verbindung fehlgeschlagen",
+      "invalid_auth": "Ungültige Anmeldedaten",
+      "unknown": "Unerwarteter Fehler"
+    },
+    "step": {
+      "dhcp_confirm": {
+        "data": {
+          "password": "Passwort",
+          "username": "Benutzername"
+        },
+        "description": "Ein Teltonika-Gerät ({name}) wurde unter {host} gefunden. Gib die Anmeldedaten ein, um es zu Home Assistant hinzuzufügen.",
+        "title": "Gefundenes Teltonika-Gerät"
+      },
+      "reauth_confirm": {
+        "data": {
+          "password": "Passwort",
+          "username": "Benutzername"
+        },
+        "description": "Aktualisiere die Anmeldedaten für {name}. Der aktuelle Host ist {host}.",
+        "title": "Authentifizierung für {name} fehlgeschlagen"
+      },
+      "user": {
+        "data": {
+          "host": "Host",
+          "password": "Passwort",
+          "username": "Benutzername",
+          "verify_ssl": "SSL-Zertifikat prüfen"
+        },
+        "description": "Gib die Verbindungsdaten deines Teltonika-Geräts ein.",
+        "title": "Teltonika-Gerät einrichten"
+      }
+    }
+  },
+  "entity": {
+    "device_tracker": {
+      "gps_location": {
+        "name": "GPS-Position"
+      }
+    },
+    "select": {
+      "active_esim": {
+        "name": "{modem_name} Aktives eSIM-Profil"
+      },
+      "active_sim": {
+        "name": "{modem_name} Aktive SIM"
+      }
+    },
+    "sensor": {
+      "active_sim": {
+        "name": "{modem_name} Aktive SIM"
+      },
+      "active_wan": {
+        "name": "Aktive Internetverbindung"
+      },
+      "band": {
+        "name": "{modem_name} Band"
+      },
+      "ca_bands": {
+        "name": "{modem_name} Carrier-Aggregation-Bänder"
+      },
+      "connection_type": {
+        "name": "{modem_name} Verbindungstyp"
+      },
+      "esim_profile": {
+        "name": "{modem_name} eSIM-Profil"
+      },
+      "gps_accuracy": {
+        "name": "GPS-Genauigkeit (HDOP)"
+      },
+      "gps_altitude": {
+        "name": "GPS-Höhe"
+      },
+      "gps_course": {
+        "name": "GPS-Kurs"
+      },
+      "gps_latitude": {
+        "name": "GPS-Breitengrad"
+      },
+      "gps_longitude": {
+        "name": "GPS-Längengrad"
+      },
+      "gps_satellites": {
+        "name": "GPS-Satelliten"
+      },
+      "gps_speed": {
+        "name": "GPS-Geschwindigkeit"
+      },
+      "operator": {
+        "name": "{modem_name} Netzbetreiber"
+      },
+      "rsrp": {
+        "name": "{modem_name} RSRP"
+      },
+      "rsrq": {
+        "name": "{modem_name} RSRQ"
+      },
+      "rssi": {
+        "name": "{modem_name} RSSI"
+      },
+      "sinr": {
+        "name": "{modem_name} SINR"
+      }
+    }
+  }
+}

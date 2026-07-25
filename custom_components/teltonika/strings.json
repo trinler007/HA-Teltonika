@@ -1,0 +1,127 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
+      "reauth_successful": "[%key:common::config_flow::abort::reauth_successful%]",
+      "wrong_account": "The device does not match the existing configuration."
+    },
+    "error": {
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
+      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "unknown": "[%key:common::config_flow::error::unknown%]"
+    },
+    "step": {
+      "dhcp_confirm": {
+        "data": {
+          "password": "[%key:common::config_flow::data::password%]",
+          "username": "[%key:common::config_flow::data::username%]"
+        },
+        "data_description": {
+          "password": "The password to authenticate with the device.",
+          "username": "The username to authenticate with the device."
+        },
+        "description": "A Teltonika device ({name}) was discovered at {host}. Enter the credentials to add it to Home Assistant.",
+        "title": "Discovered Teltonika device"
+      },
+      "reauth_confirm": {
+        "data": {
+          "password": "[%key:common::config_flow::data::password%]",
+          "username": "[%key:common::config_flow::data::username%]"
+        },
+        "data_description": {
+          "password": "[%key:component::teltonika::config::step::dhcp_confirm::data_description::password%]",
+          "username": "[%key:component::teltonika::config::step::dhcp_confirm::data_description::username%]"
+        },
+        "description": "Update the credentials for {name}. The current host is {host}.",
+        "title": "Authentication failed for {name}"
+      },
+      "user": {
+        "data": {
+          "host": "[%key:common::config_flow::data::host%]",
+          "password": "[%key:common::config_flow::data::password%]",
+          "username": "[%key:common::config_flow::data::username%]",
+          "verify_ssl": "[%key:common::config_flow::data::verify_ssl%]"
+        },
+        "data_description": {
+          "host": "The hostname or IP address of your Teltonika device.",
+          "password": "[%key:component::teltonika::config::step::dhcp_confirm::data_description::password%]",
+          "username": "[%key:component::teltonika::config::step::dhcp_confirm::data_description::username%]",
+          "verify_ssl": "Whether to validate the SSL certificate when using HTTPS. Most Teltonika devices use self-signed certificates, so you will need to disable this option unless you have installed a valid certificate on your device."
+        },
+        "description": "Enter the connection details for your Teltonika device.",
+        "title": "Set up Teltonika device"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "active_sim": {
+        "name": "{modem_name} Active SIM"
+      },
+      "active_wan": {
+        "name": "Active Internet connection"
+      },
+      "band": {
+        "name": "{modem_name} Band"
+      },
+      "ca_bands": {
+        "name": "{modem_name} Carrier aggregation bands"
+      },
+      "connection_type": {
+        "name": "{modem_name} Connection type"
+      },
+      "operator": {
+        "name": "{modem_name} Operator"
+      },
+      "esim_profile": {
+        "name": "{modem_name} eSIM profile"
+      },
+      "gps_accuracy": {
+        "name": "GPS accuracy (HDOP)"
+      },
+      "gps_altitude": {
+        "name": "GPS altitude"
+      },
+      "gps_course": {
+        "name": "GPS course"
+      },
+      "gps_latitude": {
+        "name": "GPS latitude"
+      },
+      "gps_longitude": {
+        "name": "GPS longitude"
+      },
+      "gps_satellites": {
+        "name": "GPS satellites"
+      },
+      "gps_speed": {
+        "name": "GPS speed"
+      },
+      "rsrp": {
+        "name": "{modem_name} RSRP"
+      },
+      "rsrq": {
+        "name": "{modem_name} RSRQ"
+      },
+      "rssi": {
+        "name": "{modem_name} RSSI"
+      },
+      "sinr": {
+        "name": "{modem_name} SINR"
+      }
+    },
+    "select": {
+      "active_esim": {
+        "name": "{modem_name} Active eSIM profile"
+      },
+      "active_sim": {
+        "name": "{modem_name} Active SIM"
+      }
+    },
+    "device_tracker": {
+      "gps_location": {
+        "name": "GPS location"
+      }
+    }
+  }
+}

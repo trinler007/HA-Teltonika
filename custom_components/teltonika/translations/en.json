@@ -1,0 +1,113 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Device is already configured",
+      "reauth_successful": "Re-authentication was successful",
+      "wrong_account": "The device does not match the existing configuration."
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unexpected error"
+    },
+    "step": {
+      "dhcp_confirm": {
+        "data": {
+          "password": "Password",
+          "username": "Username"
+        },
+        "description": "A Teltonika device ({name}) was discovered at {host}. Enter the credentials to add it to Home Assistant.",
+        "title": "Discovered Teltonika device"
+      },
+      "reauth_confirm": {
+        "data": {
+          "password": "Password",
+          "username": "Username"
+        },
+        "description": "Update the credentials for {name}. The current host is {host}.",
+        "title": "Authentication failed for {name}"
+      },
+      "user": {
+        "data": {
+          "host": "Host",
+          "password": "Password",
+          "username": "Username",
+          "verify_ssl": "Verify SSL certificate"
+        },
+        "description": "Enter the connection details for your Teltonika device.",
+        "title": "Set up Teltonika device"
+      }
+    }
+  },
+  "entity": {
+    "device_tracker": {
+      "gps_location": {
+        "name": "GPS location"
+      }
+    },
+    "select": {
+      "active_esim": {
+        "name": "{modem_name} Active eSIM profile"
+      },
+      "active_sim": {
+        "name": "{modem_name} Active SIM"
+      }
+    },
+    "sensor": {
+      "active_sim": {
+        "name": "{modem_name} Active SIM"
+      },
+      "active_wan": {
+        "name": "Active Internet connection"
+      },
+      "band": {
+        "name": "{modem_name} Band"
+      },
+      "ca_bands": {
+        "name": "{modem_name} Carrier aggregation bands"
+      },
+      "connection_type": {
+        "name": "{modem_name} Connection type"
+      },
+      "esim_profile": {
+        "name": "{modem_name} eSIM profile"
+      },
+      "gps_accuracy": {
+        "name": "GPS accuracy (HDOP)"
+      },
+      "gps_altitude": {
+        "name": "GPS altitude"
+      },
+      "gps_course": {
+        "name": "GPS course"
+      },
+      "gps_latitude": {
+        "name": "GPS latitude"
+      },
+      "gps_longitude": {
+        "name": "GPS longitude"
+      },
+      "gps_satellites": {
+        "name": "GPS satellites"
+      },
+      "gps_speed": {
+        "name": "GPS speed"
+      },
+      "operator": {
+        "name": "{modem_name} Operator"
+      },
+      "rsrp": {
+        "name": "{modem_name} RSRP"
+      },
+      "rsrq": {
+        "name": "{modem_name} RSRQ"
+      },
+      "rssi": {
+        "name": "{modem_name} RSSI"
+      },
+      "sinr": {
+        "name": "{modem_name} SINR"
+      }
+    }
+  }
+}
