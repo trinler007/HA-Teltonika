@@ -28,7 +28,9 @@ async def async_setup_entry(
     def _async_add_selectors() -> None:
         entities: list[SelectEntity] = []
         for modem_id, modem in coordinator.data.modems.items():
-            if supports_sim_switch(modem) and modem_id not in known_modems:
+            if (
+                supports_sim_switch(modem) or coordinator.supports_esim(modem_id)
+            ) and modem_id not in known_modems:
                 entities.append(TeltonikaSimSelect(coordinator, modem_id))
                 known_modems.add(modem_id)
 
@@ -100,10 +102,15 @@ class TeltonikaSimSelect(TeltonikaBaseSelect):
     @override
     def options(self) -> list[str]:
         """Return physical slots and installed eSIM profiles."""
-        return self._physical_options + [
-            f"eSIM: {profile.get('name') or profile['id']}"
-            for profile in self._esim_profiles()
-        ]
+        esim_source = ["eSIM"] if self.coordinator.supports_esim(self._modem_id) else []
+        return (
+            self._physical_options
+            + esim_source
+            + [
+                f"eSIM: {profile.get('name') or profile['id']}"
+                for profile in self._esim_profiles()
+            ]
+        )
 
     @property
     @override
@@ -121,10 +128,10 @@ class TeltonikaSimSelect(TeltonikaBaseSelect):
                 None,
             )
             return (
-                f"eSIM: {profile.get('name') or profile['id']}"
-                if profile
-                else (f"eSIM: {active}")
+                f"eSIM: {profile.get('name') or profile['id']}" if profile else "eSIM"
             )
+        if self.coordinator.is_esim_active(self._modem_id):
+            return "eSIM"
         return (
             f"SIM {modem.active_sim}" if modem and modem.active_sim in (1, 2) else None
         )
@@ -132,6 +139,9 @@ class TeltonikaSimSelect(TeltonikaBaseSelect):
     @override
     async def async_select_option(self, option: str) -> None:
         """Select a SIM."""
+        if option == "eSIM":
+            await self.coordinator.async_activate_esim(self._modem_id)
+            return
         if option.startswith("eSIM: "):
             selected = option.removeprefix("eSIM: ")
             profile = next(

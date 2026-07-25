@@ -123,6 +123,54 @@ def supports_sim_switch(modem: Any) -> bool:
     )
 
 
+def is_enabled(value: Any) -> bool:
+    """Return whether an API value represents an enabled flag."""
+    return (
+        value is True
+        or value == 1
+        or (isinstance(value, str) and value.lower() in {"1", "true", "yes", "on"})
+    )
+
+
+def is_esim_sim_card(sim_card: Any) -> bool:
+    """Return whether a SIM-card configuration represents an eSIM."""
+    if not isinstance(sim_card, dict):
+        return False
+    return bool(sim_card.get("esim_profile")) or str(
+        sim_card.get("type", "")
+    ).lower() in {"esim", "e-sim"}
+
+
+def esim_sim_card_for_modem(
+    sim_cards: list[dict[str, Any]],
+    modem_id: str,
+    preferred_profile: str | None = None,
+) -> dict[str, Any] | None:
+    """Return the best eSIM configuration to activate for a modem."""
+    candidates = [
+        sim_card
+        for sim_card in sim_cards
+        if str(sim_card.get("modem")) == modem_id and is_esim_sim_card(sim_card)
+    ]
+    if not candidates:
+        return None
+    if preferred_profile and (
+        match := next(
+            (
+                sim_card
+                for sim_card in candidates
+                if str(sim_card.get("esim_profile")) == preferred_profile
+            ),
+            None,
+        )
+    ):
+        return match
+    return next(
+        (sim_card for sim_card in candidates if is_enabled(sim_card.get("primary"))),
+        candidates[0],
+    )
+
+
 def reverse_geocode_location_name(payload: Any) -> str | None:
     """Extract the best worldwide locality name from a geocoder response."""
     if not isinstance(payload, dict):

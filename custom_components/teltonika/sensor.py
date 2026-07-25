@@ -606,6 +606,7 @@ class TeltonikaTrafficUsageSensor(TeltonikaBaseSensor):
         else:
             self._attr_native_unit_of_measurement = UnitOfInformation.GIGABYTES
             self._divisor = 1_000_000_000
+        self._attr_suggested_unit_of_measurement = self._attr_native_unit_of_measurement
 
     @property
     @override

@@ -12,6 +12,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from teltasync import Teltasync
 
@@ -29,6 +30,36 @@ PLATFORMS = [
 ]
 
 TeltonikaConfigEntry = ConfigEntry[TeltonikaDataUpdateCoordinator]
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: TeltonikaConfigEntry) -> bool:
+    """Migrate stored Teltonika entity preferences."""
+    if entry.version > 1:
+        return False
+
+    if entry.version == 1 and entry.minor_version < 2:
+        registry = er.async_get(hass)
+        entry_prefix = entry.unique_id or entry.entry_id
+        for registry_entry in er.async_entries_for_config_entry(
+            registry, entry.entry_id
+        ):
+            unique_id = registry_entry.unique_id
+            if not unique_id.startswith(f"{entry_prefix}_traffic_"):
+                continue
+            private_options = dict(registry_entry.options.get("sensor.private", {}))
+            private_options["suggested_unit_of_measurement"] = (
+                "MB"
+                if "_traffic_today_" in unique_id or "_traffic_yesterday_" in unique_id
+                else "GB"
+            )
+            registry.async_update_entity_options(
+                registry_entry.entity_id,
+                "sensor.private",
+                private_options,
+            )
+        hass.config_entries.async_update_entry(entry, version=1, minor_version=2)
+
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: TeltonikaConfigEntry) -> bool:

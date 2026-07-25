@@ -34,9 +34,13 @@ from .const import (
 from .helpers import (
     active_wan_interfaces,
     as_float,
+    as_int,
     data_usage_totals,
     distance_km,
     esim_profiles_for_modem,
+    esim_sim_card_for_modem,
+    is_enabled,
+    is_esim_sim_card,
     reverse_geocode_location_name,
     supports_sim_switch,
 )
@@ -53,7 +57,7 @@ TRAFFIC_REFRESH_INTERVAL = 300
 GEOCODING_REFRESH_INTERVAL = 900
 GEOCODING_MIN_DISTANCE_KM = 1.0
 GEOCODING_USER_AGENT = (
-    "HA-Teltonika/0.5.0 (+https://github.com/trinler007/HA-Teltonika)"
+    "HA-Teltonika/0.5.2 (+https://github.com/trinler007/HA-Teltonika)"
 )
 
 
@@ -66,6 +70,7 @@ class TeltonikaData:
     interfaces: list[dict[str, Any]] = field(default_factory=list)
     failover: dict[str, dict[str, Any]] = field(default_factory=dict)
     esim_profiles: list[dict[str, Any]] = field(default_factory=list)
+    sim_cards: list[dict[str, Any]] = field(default_factory=list)
     system_usage: dict[str, Any] = field(default_factory=dict)
     traffic_usage: dict[str, dict[str, int]] = field(default_factory=dict)
     location_name: str | None = None
@@ -99,6 +104,7 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         self.client = client
         self.base_url = base_url
         self.firmware_version: str | None = None
+        self.esim_supported = False
         self._nmea_server: NmeaTcpServer | None = None
         self._nmea_last_update: float | None = None
         self._nmea_last_received: datetime | None = None
@@ -167,6 +173,28 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             self.data.esim_profiles,
             list(self.data.modems),
             modem_id,
+        )
+
+    def supports_esim(self, modem_id: str) -> bool:
+        """Return whether this router exposes an eSIM for a modem."""
+        return self.esim_supported or any(
+            str(sim_card.get("modem")) == modem_id and is_esim_sim_card(sim_card)
+            for sim_card in self.data.sim_cards
+        )
+
+    def is_esim_active(self, modem_id: str) -> bool:
+        """Return whether an eSIM is currently active on a modem."""
+        modem = self.data.modems.get(modem_id)
+        if modem is None:
+            return False
+        if modem.esim_profile:
+            return True
+        return any(
+            str(sim_card.get("modem")) == modem_id
+            and is_esim_sim_card(sim_card)
+            and is_enabled(sim_card.get("primary"))
+            and as_int(sim_card.get("position")) == modem.active_sim
+            for sim_card in self.data.sim_cards
         )
 
     async def async_start_nmea(self) -> None:
@@ -369,6 +397,12 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             configuration_url=self.base_url,
         )
         self.firmware_version = system_info_response.static.fw_version
+        device_status = await self._async_optional_data("system/device/status")
+        if isinstance(device_status, dict):
+            board = device_status.get("board")
+            hwinfo = board.get("hwinfo") if isinstance(board, dict) else None
+            if isinstance(hwinfo, dict):
+                self.esim_supported = is_enabled(hwinfo.get("esim"))
 
     async def _async_optional_data(
         self,
@@ -415,12 +449,14 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
                 interfaces,
                 failover,
                 esim_profiles,
+                sim_cards,
                 system_usage,
                 traffic_usage,
             ) = await asyncio.gather(
                 self._async_optional_data("interfaces/status"),
                 self._async_optional_data("failover/status"),
                 self._async_optional_data("esim/config"),
+                self._async_optional_data("sim_cards/config"),
                 self._async_optional_data("system/device/usage/status"),
                 self._async_update_traffic_usage(),
             )
@@ -449,6 +485,7 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             interfaces=interfaces if isinstance(interfaces, list) else [],
             failover=failover if isinstance(failover, dict) else {},
             esim_profiles=esim_profiles if isinstance(esim_profiles, list) else [],
+            sim_cards=sim_cards if isinstance(sim_cards, list) else [],
             system_usage=system_usage if isinstance(system_usage, dict) else {},
             traffic_usage=traffic_usage,
             location_name=self._location_name,
@@ -464,6 +501,22 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             raise ValueError(
                 "Direct SIM selection is only supported for dual-SIM modems"
             )
+
+        sim_cards = await self._async_get_sim_cards()
+        physical_sim = next(
+            (
+                sim_card
+                for sim_card in sim_cards
+                if str(sim_card.get("modem")) == modem_id
+                and not is_esim_sim_card(sim_card)
+                and as_int(sim_card.get("position")) == sim
+            ),
+            None,
+        )
+        if physical_sim is not None:
+            await self._async_activate_sim_card(modem_id, physical_sim)
+            await self.async_request_refresh()
+            return
 
         if modem.esim_profile:
             active = str(modem.esim_profile)
@@ -485,6 +538,35 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         await self.client.switch_sim(modem_id)
         await self.async_request_refresh()
 
+    async def async_activate_esim(self, modem_id: str) -> None:
+        """Set the router eSIM as default, make it active, and rediscover profiles."""
+        sim_cards = await self._async_get_sim_cards()
+        modem = self.data.modems[modem_id]
+        sim_card = esim_sim_card_for_modem(
+            sim_cards,
+            modem_id,
+            str(modem.esim_profile) if modem.esim_profile else None,
+        )
+        if sim_card is None:
+            raise TeltonikaConnectionError(
+                "The router did not expose an eSIM entry in sim_cards/config"
+            )
+
+        await self._async_activate_sim_card(modem_id, sim_card)
+        for delay in (2, 3, 5):
+            await asyncio.sleep(delay)
+            profiles = await self._async_optional_data("esim/config")
+            if isinstance(profiles, list) and profiles:
+                self.async_set_updated_data(
+                    replace(
+                        self.data,
+                        esim_profiles=profiles,
+                        sim_cards=sim_cards,
+                    )
+                )
+                break
+        await self.async_request_refresh()
+
     async def async_select_esim_profile(self, profile_id: str) -> None:
         """Enable an eSIM profile."""
         await self._async_set_esim_profile(profile_id, enabled=True)
@@ -504,6 +586,34 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             raise TeltonikaConnectionError(
                 f"Failed to {action} eSIM profile: {message}"
             )
+
+    async def _async_get_sim_cards(self) -> list[dict[str, Any]]:
+        """Fetch current SIM-card configuration."""
+        sim_cards = await self._async_optional_data("sim_cards/config")
+        if isinstance(sim_cards, list):
+            return sim_cards
+        return self.data.sim_cards
+
+    async def _async_activate_sim_card(
+        self, modem_id: str, sim_card: dict[str, Any]
+    ) -> None:
+        """Set a SIM-card configuration as default and restart the connection."""
+        sim_card_id = sim_card.get("id")
+        if not sim_card_id:
+            raise TeltonikaConnectionError("SIM-card configuration has no ID")
+        response = await self.client.auth.request_json(
+            "PUT",
+            f"sim_cards/config/{sim_card_id}",
+            json={"data": {"primary": "1"}},
+        )
+        if not response.get("success"):
+            raise TeltonikaConnectionError("Failed to set the default SIM")
+        response = await self.client.auth.request_json(
+            "POST",
+            f"modems/{modem_id}/actions/restart_connection",
+        )
+        if not response.get("success"):
+            raise TeltonikaConnectionError("Failed to make the default SIM active")
 
     def active_wan_interfaces(self) -> list[dict[str, Any]]:
         """Return active Internet-facing interfaces in router priority order."""

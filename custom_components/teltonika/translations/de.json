@@ -72,6 +72,9 @@
       }
     },
     "button": {
+      "select_esim": {
+        "name": "{modem_name} eSIM auswählen"
+      },
       "select_sim": {
         "name": "{modem_name} SIM {sim_slot} auswählen"
       }

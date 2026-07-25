@@ -110,7 +110,7 @@ class TeltonikaConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Teltonika."""
 
     VERSION = 1
-    MINOR_VERSION = 1
+    MINOR_VERSION = 2
     _discovered_host: str | None = None
 
     @staticmethod
