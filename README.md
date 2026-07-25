@@ -113,15 +113,19 @@ dass eine Custom Integration die eingebaute Integration überschreibt.
 Für Dual-SIM- und entsprechend gekennzeichnete eSIM-Modems stellt die
 Integration eine Select-Entität mit `SIM 1` und `SIM 2` sowie je einen Button
 für beide Slots bereit. Der Router wird nur dann umgeschaltet, wenn die
-gewählte SIM nicht bereits aktiv ist. Die Teltonika-API bietet dafür eine
-„zur nächsten SIM wechseln“-Aktion; die direkte Auswahl wird durch Vergleich
-mit `active_sim` sicher darauf abgebildet.
+gewählte SIM nicht bereits aktiv ist. Wenn `/api/sim_cards/config` verfügbar
+ist, setzt die Integration den gewählten Eintrag direkt als Standard und
+startet die Mobilfunkverbindung neu. Bei älteren Dual-SIM-Geräten bleibt die
+Teltonika-Aktion „zur nächsten SIM wechseln“ als Fallback erhalten.
 
-eSIM-Entitäten werden ausschließlich erstellt, wenn der Router Profile über
-`/api/esim/config` meldet. Beim Auswählen wird das gewählte Profil aktiviert.
-Installierte eSIM-Profile erscheinen außerdem direkt in der gemeinsamen
-SIM-Quellenauswahl als `eSIM: Profilname`. Profile ohne Modem-ID werden bei
-Routern mit genau einem Modem automatisch diesem Modem zugeordnet.
+Auf eSIM-fähiger Hardware enthält die gemeinsame SIM-Quellenauswahl zusätzlich
+`eSIM`, auch wenn `/api/esim/config` bei aktiver physischer SIM noch keine
+Profile liefert. Die Auswahl setzt den eSIM-Eintrag über
+`/api/sim_cards/config` als Standard, startet die Mobilfunkverbindung neu und
+fragt die Profile anschließend erneut ab. Dafür steht auch ein eigener
+eSIM-Auswahlbutton bereit. Sobald Profile sichtbar sind, erscheinen sie als
+`eSIM: Profilname`; zusätzlich wird die separate Profilauswahl angelegt.
+Profile ohne Modem-ID werden bei genau einem Modem diesem Modem zugeordnet.
 
 ## Mobilfunk-Datenverbrauch
 
@@ -133,7 +137,10 @@ MB oder GB darstellen.
 
 Tageswerte werden nativ in MB, Monatswerte nativ in GB ausgegeben. Der exakte
 vom Router gelieferte Ausgangswert in Bytes bleibt jeweils als Attribut
-`raw_bytes` verfügbar.
+`raw_bytes` verfügbar. Beim Update von 0.5.1 auf 0.5.2 werden die von älteren
+Versionen in der Home-Assistant-Entity-Registry gespeicherten
+Byte-Anzeigeeinheiten einmalig auf MB beziehungsweise GB migriert. Eine vom
+Benutzer ausdrücklich gewählte Anzeigeeinheit bleibt erhalten.
 
 Laufende Zeiträume werden höchstens alle fünf Minuten abgefragt. Abgeschlossene
 Zeiträume werden zwischengespeichert und nur nach einem Tages- oder

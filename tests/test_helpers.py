@@ -95,6 +95,54 @@ class ReverseGeocodingTests(unittest.TestCase):
 class EsimProfileTests(unittest.TestCase):
     """Test profile assignment for eSIM API variants."""
 
+    def test_identifies_and_selects_esim_sim_card(self) -> None:
+        sim_cards = [
+            {"id": "sim1", "modem": "1-1", "position": "1", "primary": "1"},
+            {
+                "id": "esim1",
+                "modem": "1-1",
+                "position": "2",
+                "esim_profile": "1",
+                "primary": "0",
+            },
+            {
+                "id": "esim2",
+                "modem": "1-1",
+                "position": "2",
+                "esim_profile": "2",
+                "primary": "0",
+            },
+        ]
+
+        self.assertFalse(HELPERS.is_esim_sim_card(sim_cards[0]))
+        self.assertTrue(HELPERS.is_esim_sim_card(sim_cards[1]))
+        self.assertEqual(
+            HELPERS.esim_sim_card_for_modem(sim_cards, "1-1", "2")["id"],
+            "esim2",
+        )
+
+    def test_prefers_default_esim_and_handles_missing_modem(self) -> None:
+        sim_cards = [
+            {
+                "id": "esim1",
+                "modem": "1-1",
+                "esim_profile": "1",
+                "primary": "0",
+            },
+            {
+                "id": "esim2",
+                "modem": "1-1",
+                "esim_profile": "2",
+                "primary": "1",
+            },
+        ]
+
+        self.assertEqual(
+            HELPERS.esim_sim_card_for_modem(sim_cards, "1-1")["id"],
+            "esim2",
+        )
+        self.assertIsNone(HELPERS.esim_sim_card_for_modem(sim_cards, "2-1"))
+
     def test_assigns_profile_without_modem_on_single_modem_router(self) -> None:
         profile = {"id": "1", "name": "Travel"}
         self.assertEqual(
