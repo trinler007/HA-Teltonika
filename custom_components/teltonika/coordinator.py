@@ -59,7 +59,7 @@ GEOCODING_REFRESH_INTERVAL = 900
 GEOCODING_MIN_DISTANCE_KM = 1.0
 SIM_SWITCH_POLL_DELAYS = (2, 3, 5, 5, 5, 5, 5)
 GEOCODING_USER_AGENT = (
-    "HA-Teltonika/0.5.3 (+https://github.com/trinler007/HA-Teltonika)"
+    "HA-Teltonika/0.5.4 (+https://github.com/trinler007/HA-Teltonika)"
 )
 
 
@@ -169,6 +169,13 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             self.config_entry.options.get(CONF_REVERSE_GEOCODING_ENABLED, False)
         )
 
+    @callback
+    def _async_publish_live_data(self, data: TeltonikaData) -> None:
+        """Publish pushed data without delaying the scheduled API refresh."""
+        self.data = data
+        self.last_update_success = True
+        self.async_update_listeners()
+
     def esim_profiles_for_modem(self, modem_id: str) -> list[dict[str, Any]]:
         """Return profiles assigned to a modem, including unambiguous legacy data."""
         return esim_profiles_for_modem(
@@ -238,7 +245,7 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             NMEA_STATUS_TIMEOUT,
             self._async_nmea_status_expired,
         )
-        self.async_set_updated_data(replace(self.data, gps=gps))
+        self._async_publish_live_data(replace(self.data, gps=gps))
 
     @callback
     def _async_process_nmea_connection(self, connected: bool) -> None:
@@ -574,7 +581,7 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             await asyncio.sleep(delay)
             profiles = await self._async_optional_data("esim/config")
             if isinstance(profiles, list) and profiles:
-                self.async_set_updated_data(
+                self._async_publish_live_data(
                     replace(
                         self.data,
                         esim_profiles=profiles,
@@ -659,7 +666,7 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             }
             if not modems:
                 continue
-            self.async_set_updated_data(replace(self.data, modems=modems))
+            self._async_publish_live_data(replace(self.data, modems=modems))
             modem = modems.get(modem_id)
             if modem is not None and modem_sim_switch_complete(
                 modem,
