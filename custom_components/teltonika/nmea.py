@@ -124,12 +124,19 @@ class NmeaTcpServer:
         self,
         port: int,
         update_callback: Callable[[dict[str, Any]], None],
+        connection_callback: Callable[[bool], None],
     ) -> None:
         """Initialize the receiver."""
         self._port = port
         self._update_callback = update_callback
+        self._connection_callback = connection_callback
         self._server: asyncio.AbstractServer | None = None
         self._writers: set[asyncio.StreamWriter] = set()
+
+    @property
+    def connected(self) -> bool:
+        """Return whether at least one NMEA sender is connected."""
+        return bool(self._writers)
 
     async def async_start(self) -> None:
         """Start listening on all IPv4 interfaces."""
@@ -163,6 +170,8 @@ class NmeaTcpServer:
     ) -> None:
         """Read NMEA sentences from one router connection."""
         self._writers.add(writer)
+        if len(self._writers) == 1:
+            self._connection_callback(True)
         peer = writer.get_extra_info("peername")
         _LOGGER.debug("NMEA stream connected from %s", peer)
         try:
@@ -177,6 +186,8 @@ class NmeaTcpServer:
             _LOGGER.debug("NMEA stream from %s ended: %s", peer, err)
         finally:
             self._writers.discard(writer)
+            if not self._writers:
+                self._connection_callback(False)
             writer.close()
             with contextlib.suppress(ConnectionError):
                 await writer.wait_closed()

@@ -16,6 +16,7 @@ from homeassistant.const import (
     DEGREE,
     SIGNAL_STRENGTH_DECIBELS,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+    UnitOfInformation,
     UnitOfLength,
     UnitOfSpeed,
     UnitOfTemperature,
@@ -226,6 +227,9 @@ GPS_SENSORS: tuple[TeltonikaGpsSensorDescription, ...] = (
     ),
 )
 
+TRAFFIC_PERIODS = ("today", "yesterday", "current_month", "previous_month")
+TRAFFIC_METRICS = ("rx", "tx", "total")
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -261,6 +265,11 @@ async def async_setup_entry(
                     TeltonikaFirmwareSensor(coordinator),
                     TeltonikaUptimeSensor(coordinator),
                 )
+            )
+            entities.extend(
+                TeltonikaTrafficUsageSensor(coordinator, period, metric)
+                for period in TRAFFIC_PERIODS
+                for metric in TRAFFIC_METRICS
             )
             globals_added = True
         if entities:
@@ -570,3 +579,38 @@ class TeltonikaUptimeSensor(TeltonikaBaseSensor):
     def native_value(self) -> StateType:
         """Return router uptime in seconds."""
         return as_int(self.coordinator.data.system_usage.get("uptime_seconds"))
+
+
+class TeltonikaTrafficUsageSensor(TeltonikaBaseSensor):
+    """Calendar-period mobile data usage sensor."""
+
+    _attr_device_class = SensorDeviceClass.DATA_SIZE
+    _attr_native_unit_of_measurement = UnitOfInformation.BYTES
+    _attr_state_class = SensorStateClass.TOTAL
+    _attr_suggested_display_precision = 2
+
+    def __init__(
+        self,
+        coordinator: TeltonikaDataUpdateCoordinator,
+        period: str,
+        metric: str,
+    ) -> None:
+        """Initialize a traffic usage sensor."""
+        super().__init__(coordinator, f"traffic_{period}_{metric}")
+        self._period = period
+        self._metric = metric
+        self._attr_translation_key = f"traffic_{period}_{metric}"
+
+    @property
+    @override
+    def available(self) -> bool:
+        """Return whether RutOS supplied data for this period."""
+        return super().available and self._period in self.coordinator.data.traffic_usage
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        """Return accumulated bytes for this period and direction."""
+        return self.coordinator.data.traffic_usage.get(self._period, {}).get(
+            self._metric
+        )

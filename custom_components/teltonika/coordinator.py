@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
-from datetime import timedelta
+from datetime import datetime, timedelta
 from time import monotonic
 from typing import TYPE_CHECKING, Any, override
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 from teltasync import Teltasync, TeltonikaAuthenticationError, TeltonikaConnectionError
@@ -23,7 +25,7 @@ from .const import (
     DEFAULT_NMEA_PORT,
     DOMAIN,
 )
-from .helpers import active_wan_interfaces
+from .helpers import active_wan_interfaces, data_usage_totals, supports_sim_switch
 from .nmea import NmeaTcpServer
 
 if TYPE_CHECKING:
@@ -33,6 +35,8 @@ _LOGGER = logging.getLogger(__name__)
 
 SCAN_INTERVAL = timedelta(seconds=30)
 NMEA_FALLBACK_TIMEOUT = 15
+NMEA_STATUS_TIMEOUT = 30
+TRAFFIC_REFRESH_INTERVAL = 300
 
 
 @dataclass(slots=True)
@@ -45,6 +49,7 @@ class TeltonikaData:
     failover: dict[str, dict[str, Any]] = field(default_factory=dict)
     esim_profiles: list[dict[str, Any]] = field(default_factory=list)
     system_usage: dict[str, Any] = field(default_factory=dict)
+    traffic_usage: dict[str, dict[str, int]] = field(default_factory=dict)
 
 
 class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
@@ -72,6 +77,12 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         self.firmware_version: str | None = None
         self._nmea_server: NmeaTcpServer | None = None
         self._nmea_last_update: float | None = None
+        self._nmea_last_received: datetime | None = None
+        self._nmea_connected = False
+        self._nmea_status_cancel: Callable[[], None] | None = None
+        self._traffic_usage: dict[str, dict[str, int]] = {}
+        self._traffic_ranges: dict[str, tuple[int, int]] = {}
+        self._traffic_last_refresh: float | None = None
 
     @property
     def nmea_enabled(self) -> bool:
@@ -87,13 +98,43 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             and monotonic() - self._nmea_last_update < NMEA_FALLBACK_TIMEOUT
         )
 
+    @property
+    def nmea_status(self) -> bool:
+        """Return whether NMEA is connected or recently delivered data."""
+        return self.nmea_enabled and (
+            self._nmea_connected
+            or (
+                self._nmea_last_update is not None
+                and monotonic() - self._nmea_last_update <= NMEA_STATUS_TIMEOUT
+            )
+        )
+
+    @property
+    def nmea_connected(self) -> bool:
+        """Return whether an NMEA TCP sender is connected."""
+        return self._nmea_connected
+
+    @property
+    def nmea_last_received(self) -> datetime | None:
+        """Return when the last valid NMEA sentence was received."""
+        return self._nmea_last_received
+
+    @property
+    def nmea_port(self) -> int:
+        """Return the configured NMEA TCP port."""
+        assert self.config_entry is not None
+        return int(self.config_entry.options.get(CONF_NMEA_PORT, DEFAULT_NMEA_PORT))
+
     async def async_start_nmea(self) -> None:
         """Start the optional TCP NMEA receiver."""
         if not self.nmea_enabled:
             return
         assert self.config_entry is not None
-        port = int(self.config_entry.options.get(CONF_NMEA_PORT, DEFAULT_NMEA_PORT))
-        self._nmea_server = NmeaTcpServer(port, self._async_process_nmea)
+        self._nmea_server = NmeaTcpServer(
+            self.nmea_port,
+            self._async_process_nmea,
+            self._async_process_nmea_connection,
+        )
         await self._nmea_server.async_start()
 
     async def async_stop_nmea(self) -> None:
@@ -101,16 +142,95 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         if self._nmea_server is not None:
             await self._nmea_server.async_stop()
             self._nmea_server = None
+        if self._nmea_status_cancel is not None:
+            self._nmea_status_cancel()
+            self._nmea_status_cancel = None
+        self._nmea_connected = False
 
     @callback
     def _async_process_nmea(self, update: dict[str, Any]) -> None:
         """Merge a live NMEA update into coordinator data."""
         gps = dict(self.data.gps or {})
         gps.update(update)
+        received_at = dt_util.utcnow()
         gps["source"] = "nmea"
-        gps["received_at"] = dt_util.utcnow().isoformat()
+        gps["received_at"] = received_at.isoformat()
         self._nmea_last_update = monotonic()
+        self._nmea_last_received = received_at
+        if self._nmea_status_cancel is not None:
+            self._nmea_status_cancel()
+        self._nmea_status_cancel = async_call_later(
+            self.hass,
+            NMEA_STATUS_TIMEOUT,
+            self._async_nmea_status_expired,
+        )
         self.async_set_updated_data(replace(self.data, gps=gps))
+
+    @callback
+    def _async_process_nmea_connection(self, connected: bool) -> None:
+        """Handle a change to the NMEA TCP connection state."""
+        self._nmea_connected = connected
+        self.async_update_listeners()
+
+    @callback
+    def _async_nmea_status_expired(self, _now: datetime) -> None:
+        """Notify entities when the recent-data status expires."""
+        self._nmea_status_cancel = None
+        self.async_update_listeners()
+
+    @staticmethod
+    def _traffic_periods(now: datetime) -> dict[str, tuple[int, int]]:
+        """Return calendar-aligned traffic periods as Unix timestamps."""
+        today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        yesterday = today - timedelta(days=1)
+        month = today.replace(day=1)
+        previous_month_end = month - timedelta(seconds=1)
+        previous_month = previous_month_end.replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        )
+        return {
+            "today": (int(today.timestamp()), int(now.timestamp())),
+            "yesterday": (
+                int(yesterday.timestamp()),
+                int(today.timestamp()) - 1,
+            ),
+            "current_month": (int(month.timestamp()), int(now.timestamp())),
+            "previous_month": (
+                int(previous_month.timestamp()),
+                int(previous_month_end.timestamp()),
+            ),
+        }
+
+    async def _async_update_traffic_usage(self) -> dict[str, dict[str, int]]:
+        """Refresh current traffic counters and cache closed periods."""
+        if (
+            self._traffic_last_refresh is not None
+            and monotonic() - self._traffic_last_refresh < TRAFFIC_REFRESH_INTERVAL
+        ):
+            return self._traffic_usage
+
+        periods = self._traffic_periods(dt_util.now())
+        current_periods = {"today", "current_month"}
+        requested = {
+            name: value
+            for name, value in periods.items()
+            if name in current_periods or self._traffic_ranges.get(name) != value
+        }
+        results = await asyncio.gather(
+            *(
+                self._async_optional_data(
+                    "data_usage/custom/status",
+                    params={"from": start, "to": end},
+                )
+                for start, end in requested.values()
+            )
+        )
+        for (name, period), entries in zip(requested.items(), results, strict=True):
+            if isinstance(entries, list):
+                self._traffic_usage[name] = data_usage_totals(entries)
+                self._traffic_ranges[name] = period
+        self._traffic_last_refresh = monotonic()
+        return self._traffic_usage
 
     @override
     async def _async_setup(self) -> None:
@@ -142,10 +262,17 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         )
         self.firmware_version = system_info_response.static.fw_version
 
-    async def _async_optional_data(self, endpoint: str) -> Any:
+    async def _async_optional_data(
+        self,
+        endpoint: str,
+        *,
+        params: dict[str, Any] | None = None,
+    ) -> Any:
         """Return data from an optional endpoint, or None when unsupported."""
         try:
-            response = await self.client.auth.request_json("GET", endpoint)
+            response = await self.client.auth.request_json(
+                "GET", endpoint, params=params
+            )
         except TeltonikaAuthenticationError:
             raise
         except TeltonikaConnectionError as err:
@@ -181,11 +308,13 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
                 failover,
                 esim_profiles,
                 system_usage,
+                traffic_usage,
             ) = await asyncio.gather(
                 self._async_optional_data("interfaces/status"),
                 self._async_optional_data("failover/status"),
                 self._async_optional_data("esim/config"),
                 self._async_optional_data("system/device/usage/status"),
+                self._async_update_traffic_usage(),
             )
             if not use_nmea:
                 gps_from_api = await self._async_optional_data("gps/position/status")
@@ -212,6 +341,7 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             failover=failover if isinstance(failover, dict) else {},
             esim_profiles=esim_profiles if isinstance(esim_profiles, list) else [],
             system_usage=system_usage if isinstance(system_usage, dict) else {},
+            traffic_usage=traffic_usage,
         )
 
     async def async_select_sim(self, modem_id: str, sim: int) -> None:
@@ -219,7 +349,7 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         modem = self.data.modems[modem_id]
         if modem.active_sim == sim:
             return
-        if modem.sim_count != 2 or sim not in (1, 2):
+        if not supports_sim_switch(modem) or sim not in (1, 2):
             raise ValueError(
                 "Direct SIM selection is only supported for dual-SIM modems"
             )

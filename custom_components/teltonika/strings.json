@@ -74,6 +74,16 @@
     }
   },
   "entity": {
+    "binary_sensor": {
+      "nmea_tcp_status": {
+        "name": "NMEA TCP status"
+      }
+    },
+    "button": {
+      "select_sim": {
+        "name": "{modem_name} Select SIM {sim_slot}"
+      }
+    },
     "sensor": {
       "active_sim": {
         "name": "{modem_name} Active SIM"
@@ -143,6 +153,42 @@
       },
       "sinr": {
         "name": "{modem_name} SINR"
+      },
+      "traffic_current_month_rx": {
+        "name": "Mobile data current month RX"
+      },
+      "traffic_current_month_total": {
+        "name": "Mobile data current month total"
+      },
+      "traffic_current_month_tx": {
+        "name": "Mobile data current month TX"
+      },
+      "traffic_previous_month_rx": {
+        "name": "Mobile data previous month RX"
+      },
+      "traffic_previous_month_total": {
+        "name": "Mobile data previous month total"
+      },
+      "traffic_previous_month_tx": {
+        "name": "Mobile data previous month TX"
+      },
+      "traffic_today_rx": {
+        "name": "Mobile data today RX"
+      },
+      "traffic_today_total": {
+        "name": "Mobile data today total"
+      },
+      "traffic_today_tx": {
+        "name": "Mobile data today TX"
+      },
+      "traffic_yesterday_rx": {
+        "name": "Mobile data yesterday RX"
+      },
+      "traffic_yesterday_total": {
+        "name": "Mobile data yesterday total"
+      },
+      "traffic_yesterday_tx": {
+        "name": "Mobile data yesterday TX"
       },
       "registration_status": {
         "name": "{modem_name} Registration status"

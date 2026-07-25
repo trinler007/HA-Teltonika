@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import unittest
 from pathlib import Path
@@ -55,6 +56,37 @@ class NmeaParserTests(unittest.TestCase):
 
     def test_unsupported_sentence(self) -> None:
         self.assertIsNone(NMEA.parse_nmea_sentence("$GPGSV,1,1,00,0"))
+
+
+class NmeaTcpServerTests(unittest.IsolatedAsyncioTestCase):
+    """Test live TCP updates and connection status callbacks."""
+
+    async def test_connection_and_sentence_callbacks(self) -> None:
+        updates = []
+        connections = []
+        server = NMEA.NmeaTcpServer(0, updates.append, connections.append)
+        await server.async_start()
+        self.addAsyncCleanup(server.async_stop)
+        assert server._server is not None
+        port = server._server.sockets[0].getsockname()[1]
+
+        _reader, writer = await asyncio.open_connection("127.0.0.1", port)
+        await asyncio.sleep(0.01)
+        self.assertTrue(server.connected)
+        self.assertEqual(connections, [True])
+
+        writer.write(
+            b"$GPGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*47\r\n"
+        )
+        await writer.drain()
+        await asyncio.sleep(0.01)
+        self.assertEqual(updates[0]["satellites"], 8)
+
+        writer.close()
+        await writer.wait_closed()
+        await asyncio.sleep(0.01)
+        self.assertFalse(server.connected)
+        self.assertEqual(connections, [True, False])
 
 
 if __name__ == "__main__":

@@ -16,16 +16,20 @@ und ergänzt insbesondere Funktionen für den Teltonika RUTX50 mit RutOS 7.24.x.
   Satellitenfix, Geschwindigkeit und Kurs
 - optionaler TCP-NMEA-Empfänger für GPS-Livewerte ohne engmaschiges
   API-Polling
+- Diagnose-Binärsensor für TCP-Verbindung und zuletzt empfangene NMEA-Daten
 - Entfernung zur konfigurierbaren Heimatposition sowie sechsstelliger
   Maidenhead-Locator
 - Primärband sowie alle aktiven Carrier-Aggregation-Bänder mit Signaldetails
 - IMEI, UICC/ICCID und Mobilfunk-Registrierungsstatus
 - aktive physische SIM als Sensor und auswählbare `select`-Entität
+- je ein Aktionsbutton für SIM 1 und SIM 2
 - aktives eSIM-Profil als Sensor und auswählbare `select`-Entität auf
   RUTX50-eSIM-Hardware
 - aktive Internetverbindung aus Multi-WAN/Failover einschließlich Typ, IP,
   Modem und SIM als Attribute
 - aktuelle WAN-IP-Adresse, Router-Firmware und Betriebszeit
+- Mobilfunk-Datenverbrauch für heute, gestern, aktuellen Monat und Vormonat,
+  jeweils als RX, TX und Gesamt
 - DHCP-Erkennung, Reauthentifizierung und URL-Behandlung der Core-Integration
 
 Nicht unterstützte optionale Endpunkte (GPS, Failover oder eSIM) werden
@@ -62,6 +66,12 @@ nicht abgefragt. Bleibt der Stream länger als 15 Sekunden aus, verwendet der
 nächste reguläre 30-Sekunden-Zyklus automatisch wieder die API. Das Attribut
 `source` der GPS-Sensoren zeigt `nmea` oder `api`.
 
+Der Diagnose-Binärsensor **NMEA-TCP-Status** ist eingeschaltet, solange eine
+TCP-Verbindung des Routers besteht oder innerhalb der letzten 30 Sekunden ein
+gültiger NMEA-Satz empfangen wurde. Seine Attribute zeigen, ob der Empfänger
+aktiviert ist, ob aktuell eine TCP-Verbindung besteht, den Port und den
+Zeitpunkt des letzten gültigen Satzes.
+
 Der Port muss vom Router aus erreichbar sein. Bei einer Home-Assistant-
 Containerinstallation muss er gegebenenfalls zusätzlich als TCP-Port
 veröffentlicht werden. Der NMEA-Empfänger besitzt keine Authentifizierung und
@@ -92,14 +102,28 @@ dass eine Custom Integration die eingebaute Integration überschreibt.
 
 ## SIM-Auswahl
 
-Für Dual-SIM-Modems stellt die Integration eine Select-Entität mit `SIM 1` und
-`SIM 2` bereit. Der Router wird nur dann umgeschaltet, wenn die gewählte SIM
-nicht bereits aktiv ist. Die Teltonika-API bietet dafür eine
+Für Dual-SIM- und entsprechend gekennzeichnete eSIM-Modems stellt die
+Integration eine Select-Entität mit `SIM 1` und `SIM 2` sowie je einen Button
+für beide Slots bereit. Der Router wird nur dann umgeschaltet, wenn die
+gewählte SIM nicht bereits aktiv ist. Die Teltonika-API bietet dafür eine
 „zur nächsten SIM wechseln“-Aktion; die direkte Auswahl wird durch Vergleich
 mit `active_sim` sicher darauf abgebildet.
 
 eSIM-Entitäten werden ausschließlich erstellt, wenn der Router Profile über
 `/api/esim/config` meldet. Beim Auswählen wird das gewählte Profil aktiviert.
+
+## Mobilfunk-Datenverbrauch
+
+Die Integration liest die vom Router gespeicherte Historie über
+`/api/data_usage/custom/status`. Sie stellt RX, TX und Gesamt jeweils für
+**heute**, **gestern**, den **aktuellen Monat** und den **Vormonat** in Bytes
+bereit. Home Assistant kann diese Werte über die Geräteklasse automatisch in
+MB oder GB darstellen.
+
+Laufende Zeiträume werden höchstens alle fünf Minuten abgefragt. Abgeschlossene
+Zeiträume werden zwischengespeichert und nur nach einem Tages- oder
+Monatswechsel neu geladen. Dadurch entstehen im normalen Betrieb lediglich
+zwei zusätzliche API-Abfragen je fünf Minuten.
 
 ## Beispiel für eine Dashboard-Karte
 
@@ -117,6 +141,14 @@ cards:
     icon: mdi:sim
     features:
       - type: select-options
+  - type: button
+    entity: button.rutx50_internal_modem_select_sim_1
+    name: SIM 1
+    icon: mdi:sim
+  - type: button
+    entity: button.rutx50_internal_modem_select_sim_2
+    name: SIM 2
+    icon: mdi:sim
   - type: tile
     entity: sensor.rutx50_active_internet_connection
     name: Internet
