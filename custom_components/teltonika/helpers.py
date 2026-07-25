@@ -95,6 +95,34 @@ def interface_ip_address(interface: dict[str, Any]) -> str | None:
     return None
 
 
+def data_usage_totals(entries: Any) -> dict[str, int]:
+    """Sum RX, TX and total bytes from RutOS data-usage entries."""
+    rx_bytes = 0
+    tx_bytes = 0
+    if isinstance(entries, list):
+        for entry in entries:
+            if not isinstance(entry, list) or len(entry) < 3:
+                continue
+            try:
+                rx_bytes += max(0, int(entry[1]))
+                tx_bytes += max(0, int(entry[2]))
+            except (TypeError, ValueError):
+                continue
+    return {
+        "rx": rx_bytes,
+        "tx": tx_bytes,
+        "total": rx_bytes + tx_bytes,
+    }
+
+
+def supports_sim_switch(modem: Any) -> bool:
+    """Return whether a modem exposes physical SIM switching."""
+    return bool(
+        (getattr(modem, "sim_count", 0) or 0) >= 2
+        or getattr(modem, "sim_switch_enabled", False)
+    )
+
+
 def active_wan_interfaces(
     interfaces: list[dict[str, Any]],
     failover: dict[str, dict[str, Any]],

@@ -11,6 +11,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import TeltonikaConfigEntry
 from .coordinator import TeltonikaDataUpdateCoordinator
+from .helpers import supports_sim_switch
 
 
 async def async_setup_entry(
@@ -27,7 +28,7 @@ async def async_setup_entry(
     def _async_add_selectors() -> None:
         entities: list[SelectEntity] = []
         for modem_id, modem in coordinator.data.modems.items():
-            if modem.sim_count == 2 and modem_id not in known_modems:
+            if supports_sim_switch(modem) and modem_id not in known_modems:
                 entities.append(TeltonikaSimSelect(coordinator, modem_id))
                 known_modems.add(modem_id)
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 HELPERS_PATH = (
     Path(__file__).parents[1] / "custom_components" / "teltonika" / "helpers.py"
@@ -25,6 +26,40 @@ class ConversionTests(unittest.TestCase):
     def test_invalid_values(self) -> None:
         self.assertIsNone(HELPERS.as_float("N/A"))
         self.assertIsNone(HELPERS.as_int(None))
+
+
+class DataUsageTests(unittest.TestCase):
+    """Test RutOS traffic data aggregation."""
+
+    def test_data_usage_totals(self) -> None:
+        self.assertEqual(
+            HELPERS.data_usage_totals(
+                [
+                    [1710000000, 100, 50],
+                    [1710000060, "200", "75"],
+                    ["invalid"],
+                    [1710000120, "unknown", 5],
+                ]
+            ),
+            {"rx": 300, "tx": 125, "total": 425},
+        )
+
+    def test_sim_switch_capability(self) -> None:
+        self.assertTrue(
+            HELPERS.supports_sim_switch(
+                SimpleNamespace(sim_count=2, sim_switch_enabled=False)
+            )
+        )
+        self.assertTrue(
+            HELPERS.supports_sim_switch(
+                SimpleNamespace(sim_count=1, sim_switch_enabled=True)
+            )
+        )
+        self.assertFalse(
+            HELPERS.supports_sim_switch(
+                SimpleNamespace(sim_count=1, sim_switch_enabled=False)
+            )
+        )
 
 
 class LocationTests(unittest.TestCase):

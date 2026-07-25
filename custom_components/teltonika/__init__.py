@@ -20,7 +20,13 @@ from .util import normalize_url
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = [Platform.DEVICE_TRACKER, Platform.SELECT, Platform.SENSOR]
+PLATFORMS = [
+    Platform.BINARY_SENSOR,
+    Platform.BUTTON,
+    Platform.DEVICE_TRACKER,
+    Platform.SELECT,
+    Platform.SENSOR,
+]
 
 TeltonikaConfigEntry = ConfigEntry[TeltonikaDataUpdateCoordinator]
 
