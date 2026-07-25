@@ -586,7 +586,6 @@ class TeltonikaTrafficUsageSensor(TeltonikaBaseSensor):
     """Calendar-period mobile data usage sensor."""
 
     _attr_device_class = SensorDeviceClass.DATA_SIZE
-    _attr_native_unit_of_measurement = UnitOfInformation.BYTES
     _attr_state_class = SensorStateClass.TOTAL
     _attr_suggested_display_precision = 2
 
@@ -601,11 +600,12 @@ class TeltonikaTrafficUsageSensor(TeltonikaBaseSensor):
         self._period = period
         self._metric = metric
         self._attr_translation_key = f"traffic_{period}_{metric}"
-        self._attr_suggested_unit_of_measurement = (
-            UnitOfInformation.MEGABYTES
-            if period in ("today", "yesterday")
-            else UnitOfInformation.GIGABYTES
-        )
+        if period in ("today", "yesterday"):
+            self._attr_native_unit_of_measurement = UnitOfInformation.MEGABYTES
+            self._divisor = 1_000_000
+        else:
+            self._attr_native_unit_of_measurement = UnitOfInformation.GIGABYTES
+            self._divisor = 1_000_000_000
 
     @property
     @override
@@ -616,10 +616,21 @@ class TeltonikaTrafficUsageSensor(TeltonikaBaseSensor):
     @property
     @override
     def native_value(self) -> StateType:
-        """Return accumulated bytes for this period and direction."""
-        return self.coordinator.data.traffic_usage.get(self._period, {}).get(
+        """Return accumulated data in the period-specific display unit."""
+        value = self.coordinator.data.traffic_usage.get(self._period, {}).get(
             self._metric
         )
+        return value / self._divisor if value is not None else None
+
+    @property
+    @override
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the exact source value in bytes."""
+        return {
+            "raw_bytes": self.coordinator.data.traffic_usage.get(self._period, {}).get(
+                self._metric
+            )
+        }
 
 
 class TeltonikaLocationNameSensor(TeltonikaBaseSensor):
