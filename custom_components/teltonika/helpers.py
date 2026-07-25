@@ -123,6 +123,46 @@ def supports_sim_switch(modem: Any) -> bool:
     )
 
 
+def reverse_geocode_location_name(payload: Any) -> str | None:
+    """Extract the best worldwide locality name from a geocoder response."""
+    if not isinstance(payload, dict):
+        return None
+    address = payload.get("address")
+    if not isinstance(address, dict):
+        address = {}
+    for key in (
+        "city",
+        "town",
+        "village",
+        "municipality",
+        "hamlet",
+        "suburb",
+        "county",
+        "state",
+        "country",
+    ):
+        if value := address.get(key):
+            return str(value)
+    value = payload.get("name") or payload.get("display_name")
+    return str(value) if value else None
+
+
+def esim_profiles_for_modem(
+    profiles: list[dict[str, Any]],
+    modem_ids: list[str],
+    modem_id: str,
+) -> list[dict[str, Any]]:
+    """Assign eSIM profiles without a modem ID when only one modem exists."""
+    result = [profile for profile in profiles if str(profile.get("modem")) == modem_id]
+    if len(modem_ids) == 1 and modem_ids[0] == modem_id:
+        result.extend(
+            profile
+            for profile in profiles
+            if not profile.get("modem") and profile not in result
+        )
+    return result
+
+
 def active_wan_interfaces(
     interfaces: list[dict[str, Any]],
     failover: dict[str, dict[str, Any]],

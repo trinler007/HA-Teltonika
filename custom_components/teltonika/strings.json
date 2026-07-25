@@ -60,16 +60,22 @@
           "home_latitude": "Home latitude",
           "home_longitude": "Home longitude",
           "nmea_enabled": "Enable TCP NMEA receiver",
-          "nmea_port": "NMEA TCP port"
+          "nmea_port": "NMEA TCP port",
+          "poll_interval": "API polling interval",
+          "reverse_geocoding_enabled": "Enable worldwide location names",
+          "reverse_geocoding_url": "Reverse-geocoding service URL"
         },
         "data_description": {
           "home_latitude": "Latitude used to calculate the distance from home. Defaults to the Home Assistant home position.",
           "home_longitude": "Longitude used to calculate the distance from home. Defaults to the Home Assistant home position.",
           "nmea_enabled": "Listen for a GPS NMEA stream sent by the router. Fresh stream data replaces GPS API polling.",
-          "nmea_port": "TCP port on which Home Assistant accepts the router's NMEA stream. The usual Teltonika port is 8500."
+          "nmea_port": "TCP port on which Home Assistant accepts the router's NMEA stream. The usual Teltonika port is 8500.",
+          "poll_interval": "Seconds between regular router API updates. Default: 30; allowed: 10 to 3600. NMEA live updates are independent.",
+          "reverse_geocoding_enabled": "Send the current GPS coordinates to the configured service to resolve a city or locality. Requests are limited to one every 15 minutes and require at least 1 km movement.",
+          "reverse_geocoding_url": "Nominatim-compatible reverse endpoint. The default public OpenStreetMap service requires attribution and responsible cached use."
         },
-        "description": "Configure the calculated GPS sensors and the optional live NMEA stream.",
-        "title": "GPS options"
+        "description": "Configure API polling, calculated GPS sensors, the optional live NMEA stream, and worldwide location names.",
+        "title": "Teltonika options"
       }
     }
   },
@@ -142,6 +148,9 @@
       "maidenhead_locator": {
         "name": "Maidenhead locator"
       },
+      "location_name": {
+        "name": "Current location"
+      },
       "rsrp": {
         "name": "{modem_name} RSRP"
       },
@@ -208,7 +217,7 @@
         "name": "{modem_name} Active eSIM profile"
       },
       "active_sim": {
-        "name": "{modem_name} Active SIM"
+        "name": "{modem_name} SIM source"
       }
     },
     "device_tracker": {

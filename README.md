@@ -19,6 +19,8 @@ und ergänzt insbesondere Funktionen für den Teltonika RUTX50 mit RutOS 7.24.x.
 - Diagnose-Binärsensor für TCP-Verbindung und zuletzt empfangene NMEA-Daten
 - Entfernung zur konfigurierbaren Heimatposition sowie sechsstelliger
   Maidenhead-Locator
+- optionaler weltweiter Ortsnamensensor über einen konfigurierbaren
+  Nominatim-kompatiblen Reverse-Geocoding-Dienst
 - Primärband sowie alle aktiven Carrier-Aggregation-Bänder mit Signaldetails
 - IMEI, UICC/ICCID und Mobilfunk-Registrierungsstatus
 - aktive physische SIM als Sensor und auswählbare `select`-Entität
@@ -31,6 +33,7 @@ und ergänzt insbesondere Funktionen für den Teltonika RUTX50 mit RutOS 7.24.x.
 - Mobilfunk-Datenverbrauch für heute, gestern, aktuellen Monat und Vormonat,
   jeweils als RX, TX und Gesamt
 - DHCP-Erkennung, Reauthentifizierung und URL-Behandlung der Core-Integration
+- konfigurierbares Router-API-Abfrageintervall von 10 bis 3600 Sekunden
 
 Nicht unterstützte optionale Endpunkte (GPS, Failover oder eSIM) werden
 automatisch erkannt und beeinträchtigen die übrigen Entitäten nicht.
@@ -77,6 +80,11 @@ Containerinstallation muss er gegebenenfalls zusätzlich als TCP-Port
 veröffentlicht werden. Der NMEA-Empfänger besitzt keine Authentifizierung und
 sollte deshalb nur in einem vertrauenswürdigen lokalen Netz freigegeben werden.
 
+Das reguläre Router-API-Abfrageintervall kann auf derselben Optionsseite
+zwischen 10 und 3600 Sekunden eingestellt werden; Standard sind 30 Sekunden.
+NMEA-Liveaktualisierungen und die gedrosselte Datenverbrauchsabfrage sind davon
+unabhängig.
+
 IMEI und UICC/ICCID sind eindeutige Geräte- beziehungsweise
 Teilnehmerkennungen. Bei der Weitergabe von Screenshots oder Diagnosedaten
 sollten diese Werte anonymisiert werden.
@@ -111,6 +119,9 @@ mit `active_sim` sicher darauf abgebildet.
 
 eSIM-Entitäten werden ausschließlich erstellt, wenn der Router Profile über
 `/api/esim/config` meldet. Beim Auswählen wird das gewählte Profil aktiviert.
+Installierte eSIM-Profile erscheinen außerdem direkt in der gemeinsamen
+SIM-Quellenauswahl als `eSIM: Profilname`. Profile ohne Modem-ID werden bei
+Routern mit genau einem Modem automatisch diesem Modem zugeordnet.
 
 ## Mobilfunk-Datenverbrauch
 
@@ -120,10 +131,33 @@ Die Integration liest die vom Router gespeicherte Historie über
 bereit. Home Assistant kann diese Werte über die Geräteklasse automatisch in
 MB oder GB darstellen.
 
+Für Tageswerte wird MB als bevorzugte Anzeigeeinheit vorgeschlagen, für
+Monatswerte GB. Intern bleiben die Werte in Bytes erhalten, damit
+Langzeitstatistiken und Einheitenumrechnung korrekt funktionieren.
+
 Laufende Zeiträume werden höchstens alle fünf Minuten abgefragt. Abgeschlossene
 Zeiträume werden zwischengespeichert und nur nach einem Tages- oder
 Monatswechsel neu geladen. Dadurch entstehen im normalen Betrieb lediglich
 zwei zusätzliche API-Abfragen je fünf Minuten.
+
+## Weltweiter Ortsname
+
+Optional kann über die Integrationsoptionen der Sensor **Aktueller Ort**
+aktiviert werden. Standardmäßig nutzt er den öffentlichen
+OpenStreetMap-Nominatim-Dienst, der weltweit arbeitet und keinen API-Schlüssel
+benötigt. Die Dienst-URL ist konfigurierbar und kann auf eine eigene oder
+andere Nominatim-kompatible Instanz zeigen.
+
+Eine Abfrage erfolgt höchstens alle 15 Minuten und nur nach mindestens einem
+Kilometer Bewegung. Das Ergebnis wird zwischengespeichert. Der Sensor bevorzugt
+Stadt, Ort oder Gemeinde und fällt für dünn besiedelte Regionen auf Landkreis,
+Region oder Land zurück. Der vollständige Anzeigename, das Land und die
+OpenStreetMap-Attribution stehen als Attribute zur Verfügung.
+
+Bei Aktivierung werden GPS-Koordinaten an den eingestellten Dienst übertragen.
+Für den öffentlichen Standarddienst gelten die
+[Nominatim Usage Policy](https://operations.osmfoundation.org/policies/nominatim/)
+und die [OpenStreetMap-Urheberrechtshinweise](https://www.openstreetmap.org/copyright).
 
 ## Beispiel für eine Dashboard-Karte
 

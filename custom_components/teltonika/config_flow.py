@@ -15,6 +15,7 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, CONF_VERIFY_SSL
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
@@ -25,7 +26,12 @@ from .const import (
     CONF_HOME_LONGITUDE,
     CONF_NMEA_ENABLED,
     CONF_NMEA_PORT,
+    CONF_POLL_INTERVAL,
+    CONF_REVERSE_GEOCODING_ENABLED,
+    CONF_REVERSE_GEOCODING_URL,
     DEFAULT_NMEA_PORT,
+    DEFAULT_POLL_INTERVAL,
+    DEFAULT_REVERSE_GEOCODING_URL,
     DOMAIN,
 )
 from .util import get_url_variants
@@ -357,6 +363,16 @@ class TeltonikaOptionsFlow(OptionsFlowWithReload):
             CONF_NMEA_PORT: self.config_entry.options.get(
                 CONF_NMEA_PORT, DEFAULT_NMEA_PORT
             ),
+            CONF_POLL_INTERVAL: self.config_entry.options.get(
+                CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL
+            ),
+            CONF_REVERSE_GEOCODING_ENABLED: self.config_entry.options.get(
+                CONF_REVERSE_GEOCODING_ENABLED, False
+            ),
+            CONF_REVERSE_GEOCODING_URL: self.config_entry.options.get(
+                CONF_REVERSE_GEOCODING_URL,
+                DEFAULT_REVERSE_GEOCODING_URL,
+            ),
         }
         schema = vol.Schema(
             {
@@ -370,6 +386,11 @@ class TeltonikaOptionsFlow(OptionsFlowWithReload):
                 vol.Required(CONF_NMEA_PORT): vol.All(
                     vol.Coerce(int), vol.Range(min=1, max=65535)
                 ),
+                vol.Required(CONF_POLL_INTERVAL): vol.All(
+                    vol.Coerce(int), vol.Range(min=10, max=3600)
+                ),
+                vol.Required(CONF_REVERSE_GEOCODING_ENABLED): bool,
+                vol.Required(CONF_REVERSE_GEOCODING_URL): cv.url,
             }
         )
         return self.async_show_form(

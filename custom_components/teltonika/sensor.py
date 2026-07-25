@@ -264,6 +264,7 @@ async def async_setup_entry(
                     TeltonikaMaidenheadLocatorSensor(coordinator),
                     TeltonikaFirmwareSensor(coordinator),
                     TeltonikaUptimeSensor(coordinator),
+                    TeltonikaLocationNameSensor(coordinator),
                 )
             )
             entities.extend(
@@ -600,6 +601,11 @@ class TeltonikaTrafficUsageSensor(TeltonikaBaseSensor):
         self._period = period
         self._metric = metric
         self._attr_translation_key = f"traffic_{period}_{metric}"
+        self._attr_suggested_unit_of_measurement = (
+            UnitOfInformation.MEGABYTES
+            if period in ("today", "yesterday")
+            else UnitOfInformation.GIGABYTES
+        )
 
     @property
     @override
@@ -614,3 +620,31 @@ class TeltonikaTrafficUsageSensor(TeltonikaBaseSensor):
         return self.coordinator.data.traffic_usage.get(self._period, {}).get(
             self._metric
         )
+
+
+class TeltonikaLocationNameSensor(TeltonikaBaseSensor):
+    """Optional locality name resolved from the current GPS position."""
+
+    _attr_translation_key = "location_name"
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        """Initialize the location name sensor."""
+        super().__init__(coordinator, "location_name")
+
+    @property
+    @override
+    def available(self) -> bool:
+        """Return whether reverse geocoding supplied a place name."""
+        return super().available and self.coordinator.data.location_name is not None
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        """Return the current city or locality."""
+        return self.coordinator.data.location_name
+
+    @property
+    @override
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the full display name and attribution."""
+        return self.coordinator.data.location_details
