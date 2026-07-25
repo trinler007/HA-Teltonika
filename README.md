@@ -13,17 +13,63 @@ und ergänzt insbesondere Funktionen für den Teltonika RUTX50 mit RutOS 7.24.x.
 - alle Sensoren der offiziellen Core-Integration
 - GPS-Position als `device_tracker` für die Home-Assistant-Karte
 - GPS-Sensoren für Breiten- und Längengrad, Höhe, Satelliten, HDOP,
-  Geschwindigkeit und Kurs
+  Satellitenfix, Geschwindigkeit und Kurs
+- optionaler TCP-NMEA-Empfänger für GPS-Livewerte ohne engmaschiges
+  API-Polling
+- Entfernung zur konfigurierbaren Heimatposition sowie sechsstelliger
+  Maidenhead-Locator
 - Primärband sowie alle aktiven Carrier-Aggregation-Bänder mit Signaldetails
+- IMEI, UICC/ICCID und Mobilfunk-Registrierungsstatus
 - aktive physische SIM als Sensor und auswählbare `select`-Entität
 - aktives eSIM-Profil als Sensor und auswählbare `select`-Entität auf
   RUTX50-eSIM-Hardware
 - aktive Internetverbindung aus Multi-WAN/Failover einschließlich Typ, IP,
   Modem und SIM als Attribute
+- aktuelle WAN-IP-Adresse, Router-Firmware und Betriebszeit
 - DHCP-Erkennung, Reauthentifizierung und URL-Behandlung der Core-Integration
 
 Nicht unterstützte optionale Endpunkte (GPS, Failover oder eSIM) werden
 automatisch erkannt und beeinträchtigen die übrigen Entitäten nicht.
+
+## Heimatposition und HAM-Locator
+
+Der Sensor **Entfernung nach Hause** verwendet standardmäßig die in Home
+Assistant konfigurierte Heimatposition. Über
+**Einstellungen → Geräte & Dienste → Teltonika → Konfigurieren** können
+Breiten- und Längengrad je Router überschrieben werden. Die Entfernung wird als
+Großkreisentfernung nach der Haversine-Formel in Kilometern berechnet.
+
+Der **Maidenhead-Locator** wird als sechsstelliger Locator aus der aktuellen
+GPS-Position berechnet. Solange der Router keinen Satellitenfix meldet, bleiben
+beide berechneten Sensoren unbekannt, damit die vom Router gelieferten
+Nullkoordinaten nicht als echte Position interpretiert werden.
+
+## GPS-Livewerte über NMEA
+
+Über **Einstellungen → Geräte & Dienste → Teltonika → Konfigurieren** kann ein
+TCP-NMEA-Empfänger aktiviert werden. Home Assistant lauscht dann standardmäßig
+auf Port `8500`; der Port kann pro Integrationseintrag geändert werden. Im
+Router wird die NMEA-Weiterleitung auf die IP-Adresse des Home-Assistant-Hosts
+und diesen Port konfiguriert.
+
+Die Integration verarbeitet GGA- und RMC-Sätze mit beliebiger Talker-ID, zum
+Beispiel `$GPGGA`, `$GNGGA`, `$GPRMC` und `$GNRMC`. Dadurch werden Position,
+Höhe, Satellitenzahl, HDOP, Fixstatus, Geschwindigkeit und Kurs unmittelbar
+aktualisiert. Geschwindigkeit aus RMC wird von Knoten in km/h umgerechnet.
+
+Solange aktuelle NMEA-Daten eintreffen, wird der GPS-Endpunkt der Router-API
+nicht abgefragt. Bleibt der Stream länger als 15 Sekunden aus, verwendet der
+nächste reguläre 30-Sekunden-Zyklus automatisch wieder die API. Das Attribut
+`source` der GPS-Sensoren zeigt `nmea` oder `api`.
+
+Der Port muss vom Router aus erreichbar sein. Bei einer Home-Assistant-
+Containerinstallation muss er gegebenenfalls zusätzlich als TCP-Port
+veröffentlicht werden. Der NMEA-Empfänger besitzt keine Authentifizierung und
+sollte deshalb nur in einem vertrauenswürdigen lokalen Netz freigegeben werden.
+
+IMEI und UICC/ICCID sind eindeutige Geräte- beziehungsweise
+Teilnehmerkennungen. Bei der Weitergabe von Screenshots oder Diagnosedaten
+sollten diese Werte anonymisiert werden.
 
 ## Installation
 

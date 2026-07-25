@@ -11,6 +11,7 @@ from homeassistant.const import (
     Platform,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from teltasync import Teltasync
 
@@ -50,6 +51,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: TeltonikaConfigEntry) ->
 
     assert coordinator.device_info is not None
 
+    try:
+        await coordinator.async_start_nmea()
+    except OSError as err:
+        await client.close()
+        raise ConfigEntryNotReady(
+            f"Could not open the configured NMEA TCP port: {err}"
+        ) from err
+
     # Store runtime data
     entry.runtime_data = coordinator
 
@@ -62,6 +71,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: TeltonikaConfigEntry) ->
 async def async_unload_entry(hass: HomeAssistant, entry: TeltonikaConfigEntry) -> bool:
     """Unload a config entry."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        await entry.runtime_data.async_stop_nmea()
         await entry.runtime_data.client.close()
 
     return unload_ok

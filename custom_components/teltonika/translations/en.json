@@ -39,6 +39,26 @@
       }
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "home_latitude": "Home latitude",
+          "home_longitude": "Home longitude",
+          "nmea_enabled": "Enable TCP NMEA receiver",
+          "nmea_port": "NMEA TCP port"
+        },
+        "data_description": {
+          "home_latitude": "Latitude used to calculate the distance from home. Defaults to the Home Assistant home position.",
+          "home_longitude": "Longitude used to calculate the distance from home. Defaults to the Home Assistant home position.",
+          "nmea_enabled": "Listen for a GPS NMEA stream sent by the router. Fresh stream data replaces GPS API polling.",
+          "nmea_port": "TCP port on which Home Assistant accepts the router's NMEA stream. The usual Teltonika port is 8500."
+        },
+        "description": "Configure the calculated GPS sensors and the optional live NMEA stream.",
+        "title": "GPS options"
+      }
+    }
+  },
   "entity": {
     "device_tracker": {
       "gps_location": {
@@ -72,6 +92,9 @@
       "esim_profile": {
         "name": "{modem_name} eSIM profile"
       },
+      "firmware_version": {
+        "name": "Firmware version"
+      },
       "gps_accuracy": {
         "name": "GPS accuracy (HDOP)"
       },
@@ -80,6 +103,9 @@
       },
       "gps_course": {
         "name": "GPS course"
+      },
+      "gps_fix_status": {
+        "name": "GPS satellite fix"
       },
       "gps_latitude": {
         "name": "GPS latitude"
@@ -93,8 +119,20 @@
       "gps_speed": {
         "name": "GPS speed"
       },
+      "distance_from_home": {
+        "name": "Distance from home"
+      },
+      "imei": {
+        "name": "{modem_name} IMEI"
+      },
+      "maidenhead_locator": {
+        "name": "Maidenhead locator"
+      },
       "operator": {
         "name": "{modem_name} Operator"
+      },
+      "registration_status": {
+        "name": "{modem_name} Registration status"
       },
       "rsrp": {
         "name": "{modem_name} RSRP"
@@ -107,6 +145,15 @@
       },
       "sinr": {
         "name": "{modem_name} SINR"
+      },
+      "uicc": {
+        "name": "{modem_name} UICC (ICCID)"
+      },
+      "uptime": {
+        "name": "Uptime"
+      },
+      "wan_ip_address": {
+        "name": "WAN IP address"
       }
     }
   }

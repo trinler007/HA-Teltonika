@@ -39,6 +39,26 @@
       }
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "home_latitude": "Breitengrad der Heimatposition",
+          "home_longitude": "Längengrad der Heimatposition",
+          "nmea_enabled": "TCP-NMEA-Empfänger aktivieren",
+          "nmea_port": "NMEA-TCP-Port"
+        },
+        "data_description": {
+          "home_latitude": "Breitengrad zur Berechnung der Entfernung nach Hause. Standardmäßig wird die Heimatposition von Home Assistant verwendet.",
+          "home_longitude": "Längengrad zur Berechnung der Entfernung nach Hause. Standardmäßig wird die Heimatposition von Home Assistant verwendet.",
+          "nmea_enabled": "Einen vom Router gesendeten GPS-NMEA-Stream empfangen. Aktuelle Stream-Daten ersetzen das GPS-API-Polling.",
+          "nmea_port": "TCP-Port, auf dem Home Assistant den NMEA-Stream des Routers annimmt. Bei Teltonika ist Port 8500 üblich."
+        },
+        "description": "Konfiguriere die berechneten GPS-Sensoren und den optionalen Live-NMEA-Stream.",
+        "title": "GPS-Optionen"
+      }
+    }
+  },
   "entity": {
     "device_tracker": {
       "gps_location": {
@@ -72,6 +92,9 @@
       "esim_profile": {
         "name": "{modem_name} eSIM-Profil"
       },
+      "firmware_version": {
+        "name": "Firmware-Version"
+      },
       "gps_accuracy": {
         "name": "GPS-Genauigkeit (HDOP)"
       },
@@ -80,6 +103,9 @@
       },
       "gps_course": {
         "name": "GPS-Kurs"
+      },
+      "gps_fix_status": {
+        "name": "GPS-Satellitenfix"
       },
       "gps_latitude": {
         "name": "GPS-Breitengrad"
@@ -93,8 +119,20 @@
       "gps_speed": {
         "name": "GPS-Geschwindigkeit"
       },
+      "distance_from_home": {
+        "name": "Entfernung nach Hause"
+      },
+      "imei": {
+        "name": "{modem_name} IMEI"
+      },
+      "maidenhead_locator": {
+        "name": "Maidenhead-Locator"
+      },
       "operator": {
         "name": "{modem_name} Netzbetreiber"
+      },
+      "registration_status": {
+        "name": "{modem_name} Registrierungsstatus"
       },
       "rsrp": {
         "name": "{modem_name} RSRP"
@@ -107,6 +145,15 @@
       },
       "sinr": {
         "name": "{modem_name} SINR"
+      },
+      "uicc": {
+        "name": "{modem_name} UICC (ICCID)"
+      },
+      "uptime": {
+        "name": "Betriebszeit"
+      },
+      "wan_ip_address": {
+        "name": "WAN-IP-Adresse"
       }
     }
   }

@@ -17,5 +17,5 @@
   "issue_tracker": "https://github.com/trinler007/HA-Teltonika/issues",
   "quality_scale": "silver",
   "requirements": ["teltasync==0.4.0"],
-  "version": "0.1.0"
+  "version": "0.3.0"
 }

@@ -5,16 +5,29 @@ from collections.abc import Mapping
 from typing import Any, override
 
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+    OptionsFlowWithReload,
+)
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, CONF_VERIFY_SSL
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 from teltasync import Teltasync, TeltonikaAuthenticationError, TeltonikaConnectionError
 
-from .const import DOMAIN
+from .const import (
+    CONF_HOME_LATITUDE,
+    CONF_HOME_LONGITUDE,
+    CONF_NMEA_ENABLED,
+    CONF_NMEA_PORT,
+    DEFAULT_NMEA_PORT,
+    DOMAIN,
+)
 from .util import get_url_variants
 
 _LOGGER = logging.getLogger(__name__)
@@ -94,6 +107,12 @@ class TeltonikaConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
     MINOR_VERSION = 1
     _discovered_host: str | None = None
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """Create the options flow."""
+        return TeltonikaOptionsFlow()
 
     @override
     async def async_step_user(
@@ -314,4 +333,46 @@ class TeltonikaConfigFlow(ConfigFlow, domain=DOMAIN):
             ),
             errors=errors,
             description_placeholders=self.context.get("title_placeholders", {}),
+        )
+
+
+class TeltonikaOptionsFlow(OptionsFlowWithReload):
+    """Handle mutable Teltonika options."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Configure the home position used by calculated GPS sensors."""
+        if user_input is not None:
+            return self.async_create_entry(data=user_input)
+
+        current = {
+            CONF_HOME_LATITUDE: self.config_entry.options.get(
+                CONF_HOME_LATITUDE, self.hass.config.latitude
+            ),
+            CONF_HOME_LONGITUDE: self.config_entry.options.get(
+                CONF_HOME_LONGITUDE, self.hass.config.longitude
+            ),
+            CONF_NMEA_ENABLED: self.config_entry.options.get(CONF_NMEA_ENABLED, False),
+            CONF_NMEA_PORT: self.config_entry.options.get(
+                CONF_NMEA_PORT, DEFAULT_NMEA_PORT
+            ),
+        }
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_HOME_LATITUDE): vol.All(
+                    vol.Coerce(float), vol.Range(min=-90, max=90)
+                ),
+                vol.Required(CONF_HOME_LONGITUDE): vol.All(
+                    vol.Coerce(float), vol.Range(min=-180, max=180)
+                ),
+                vol.Required(CONF_NMEA_ENABLED): bool,
+                vol.Required(CONF_NMEA_PORT): vol.All(
+                    vol.Coerce(int), vol.Range(min=1, max=65535)
+                ),
+            }
+        )
+        return self.async_show_form(
+            step_id="init",
+            data_schema=self.add_suggested_values_to_schema(schema, current),
         )
