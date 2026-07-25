@@ -10,6 +10,7 @@ from datetime import datetime, timedelta
 from time import monotonic
 from typing import TYPE_CHECKING, Any, override
 
+from aiohttp import ClientError
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
@@ -22,10 +23,23 @@ from teltasync.modems import Modems, ModemStatusFull
 from .const import (
     CONF_NMEA_ENABLED,
     CONF_NMEA_PORT,
+    CONF_POLL_INTERVAL,
+    CONF_REVERSE_GEOCODING_ENABLED,
+    CONF_REVERSE_GEOCODING_URL,
     DEFAULT_NMEA_PORT,
+    DEFAULT_POLL_INTERVAL,
+    DEFAULT_REVERSE_GEOCODING_URL,
     DOMAIN,
 )
-from .helpers import active_wan_interfaces, data_usage_totals, supports_sim_switch
+from .helpers import (
+    active_wan_interfaces,
+    as_float,
+    data_usage_totals,
+    distance_km,
+    esim_profiles_for_modem,
+    reverse_geocode_location_name,
+    supports_sim_switch,
+)
 from .nmea import NmeaTcpServer
 
 if TYPE_CHECKING:
@@ -33,10 +47,14 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
-SCAN_INTERVAL = timedelta(seconds=30)
 NMEA_FALLBACK_TIMEOUT = 15
 NMEA_STATUS_TIMEOUT = 30
 TRAFFIC_REFRESH_INTERVAL = 300
+GEOCODING_REFRESH_INTERVAL = 900
+GEOCODING_MIN_DISTANCE_KM = 1.0
+GEOCODING_USER_AGENT = (
+    "HA-Teltonika/0.5.0 (+https://github.com/trinler007/HA-Teltonika)"
+)
 
 
 @dataclass(slots=True)
@@ -50,6 +68,8 @@ class TeltonikaData:
     esim_profiles: list[dict[str, Any]] = field(default_factory=list)
     system_usage: dict[str, Any] = field(default_factory=dict)
     traffic_usage: dict[str, dict[str, int]] = field(default_factory=dict)
+    location_name: str | None = None
+    location_details: dict[str, Any] = field(default_factory=dict)
 
 
 class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
@@ -69,7 +89,11 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             hass,
             _LOGGER,
             name="Teltonika",
-            update_interval=SCAN_INTERVAL,
+            update_interval=timedelta(
+                seconds=int(
+                    config_entry.options.get(CONF_POLL_INTERVAL, DEFAULT_POLL_INTERVAL)
+                )
+            ),
             config_entry=config_entry,
         )
         self.client = client
@@ -83,6 +107,10 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         self._traffic_usage: dict[str, dict[str, int]] = {}
         self._traffic_ranges: dict[str, tuple[int, int]] = {}
         self._traffic_last_refresh: float | None = None
+        self._location_name: str | None = None
+        self._location_details: dict[str, Any] = {}
+        self._geocoding_last_attempt: float | None = None
+        self._geocoding_coordinates: tuple[float, float] | None = None
 
     @property
     def nmea_enabled(self) -> bool:
@@ -124,6 +152,22 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         """Return the configured NMEA TCP port."""
         assert self.config_entry is not None
         return int(self.config_entry.options.get(CONF_NMEA_PORT, DEFAULT_NMEA_PORT))
+
+    @property
+    def reverse_geocoding_enabled(self) -> bool:
+        """Return whether optional reverse geocoding is enabled."""
+        assert self.config_entry is not None
+        return bool(
+            self.config_entry.options.get(CONF_REVERSE_GEOCODING_ENABLED, False)
+        )
+
+    def esim_profiles_for_modem(self, modem_id: str) -> list[dict[str, Any]]:
+        """Return profiles assigned to a modem, including unambiguous legacy data."""
+        return esim_profiles_for_modem(
+            self.data.esim_profiles,
+            list(self.data.modems),
+            modem_id,
+        )
 
     async def async_start_nmea(self) -> None:
         """Start the optional TCP NMEA receiver."""
@@ -232,6 +276,70 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         self._traffic_last_refresh = monotonic()
         return self._traffic_usage
 
+    async def _async_update_location_name(self, gps: dict[str, Any] | None) -> None:
+        """Resolve the current GPS coordinates to a worldwide place name."""
+        if not self.reverse_geocoding_enabled or not gps:
+            return
+        latitude = as_float(gps.get("latitude"))
+        longitude = as_float(gps.get("longitude"))
+        if latitude is None or longitude is None or gps.get("fix_status") in (0, "0"):
+            return
+
+        if self._geocoding_last_attempt is not None:
+            if monotonic() - self._geocoding_last_attempt < GEOCODING_REFRESH_INTERVAL:
+                return
+            if self._geocoding_coordinates is not None:
+                moved = distance_km(
+                    latitude,
+                    longitude,
+                    self._geocoding_coordinates[0],
+                    self._geocoding_coordinates[1],
+                )
+                if moved is not None and moved < GEOCODING_MIN_DISTANCE_KM:
+                    return
+
+        self._geocoding_last_attempt = monotonic()
+        self._geocoding_coordinates = (latitude, longitude)
+        assert self.config_entry is not None
+        endpoint = str(
+            self.config_entry.options.get(
+                CONF_REVERSE_GEOCODING_URL,
+                DEFAULT_REVERSE_GEOCODING_URL,
+            )
+        )
+        try:
+            async with asyncio.timeout(10):
+                async with self.client.auth.session.get(
+                    endpoint,
+                    params={
+                        "format": "jsonv2",
+                        "lat": latitude,
+                        "lon": longitude,
+                        "zoom": 10,
+                        "addressdetails": 1,
+                    },
+                    headers={
+                        "User-Agent": GEOCODING_USER_AGENT,
+                        "Accept-Language": self.hass.config.language or "en",
+                    },
+                ) as response:
+                    response.raise_for_status()
+                    payload = await response.json()
+        except (TimeoutError, ClientError, ValueError) as err:
+            _LOGGER.debug("Reverse geocoding unavailable: %s", err)
+            return
+
+        address = payload.get("address")
+        if not isinstance(address, dict):
+            address = {}
+        self._location_name = reverse_geocode_location_name(payload)
+        self._location_details = {
+            "display_name": payload.get("display_name"),
+            "country_code": address.get("country_code"),
+            "attribution": "© OpenStreetMap contributors",
+            "provider": endpoint,
+        }
+
     @override
     async def _async_setup(self) -> None:
         """Authenticate and fetch device information."""
@@ -329,6 +437,7 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             gps = {**gps_from_api, "source": "api"}
         else:
             gps = None
+        await self._async_update_location_name(gps)
 
         return TeltonikaData(
             modems={
@@ -342,32 +451,59 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             esim_profiles=esim_profiles if isinstance(esim_profiles, list) else [],
             system_usage=system_usage if isinstance(system_usage, dict) else {},
             traffic_usage=traffic_usage,
+            location_name=self._location_name,
+            location_details=self._location_details,
         )
 
     async def async_select_sim(self, modem_id: str, sim: int) -> None:
         """Select a physical SIM on a dual-SIM modem."""
         modem = self.data.modems[modem_id]
-        if modem.active_sim == sim:
+        if modem.active_sim == sim and not modem.esim_profile:
             return
         if not supports_sim_switch(modem) or sim not in (1, 2):
             raise ValueError(
                 "Direct SIM selection is only supported for dual-SIM modems"
             )
+
+        if modem.esim_profile:
+            active = str(modem.esim_profile)
+            profile = next(
+                (
+                    item
+                    for item in self.esim_profiles_for_modem(modem_id)
+                    if str(item.get("id")) == active or str(item.get("name")) == active
+                ),
+                None,
+            )
+            if profile is not None:
+                await self._async_set_esim_profile(str(profile["id"]), enabled=False)
+                await self.async_request_refresh()
+                modem = self.data.modems[modem_id]
+                if modem.active_sim == sim and not modem.esim_profile:
+                    return
+
         await self.client.switch_sim(modem_id)
         await self.async_request_refresh()
 
     async def async_select_esim_profile(self, profile_id: str) -> None:
         """Enable an eSIM profile."""
+        await self._async_set_esim_profile(profile_id, enabled=True)
+        await self.async_request_refresh()
+
+    async def _async_set_esim_profile(self, profile_id: str, *, enabled: bool) -> None:
+        """Enable or disable an eSIM profile."""
         response = await self.client.auth.request_json(
             "PUT",
             f"esim/config/{profile_id}",
-            json={"data": {"enabled": "1"}},
+            json={"data": {"enabled": "1" if enabled else "0"}},
         )
         if not response.get("success"):
             errors = response.get("errors") or []
             message = errors[0].get("error") if errors else "Unknown API error"
-            raise TeltonikaConnectionError(f"Failed to select eSIM profile: {message}")
-        await self.async_request_refresh()
+            action = "select" if enabled else "disable"
+            raise TeltonikaConnectionError(
+                f"Failed to {action} eSIM profile: {message}"
+            )
 
     def active_wan_interfaces(self) -> list[dict[str, Any]]:
         """Return active Internet-facing interfaces in router priority order."""

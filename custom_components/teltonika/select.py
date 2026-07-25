@@ -33,9 +33,9 @@ async def async_setup_entry(
                 known_modems.add(modem_id)
 
         esim_modems = {
-            str(profile.get("modem"))
-            for profile in coordinator.data.esim_profiles
-            if profile.get("modem")
+            modem_id
+            for modem_id in coordinator.data.modems
+            if coordinator.esim_profiles_for_modem(modem_id)
         }
         for modem_id in esim_modems - known_esim_modems:
             entities.append(TeltonikaEsimSelect(coordinator, modem_id))
@@ -80,7 +80,7 @@ class TeltonikaSimSelect(TeltonikaBaseSelect):
     """Select the active physical SIM."""
 
     _attr_translation_key = "active_sim"
-    _attr_options: ClassVar[list[str]] = ["SIM 1", "SIM 2"]
+    _physical_options: ClassVar[list[str]] = ["SIM 1", "SIM 2"]
 
     def __init__(
         self, coordinator: TeltonikaDataUpdateCoordinator, modem_id: str
@@ -88,11 +88,43 @@ class TeltonikaSimSelect(TeltonikaBaseSelect):
         """Initialize the SIM selector."""
         super().__init__(coordinator, modem_id, "active_sim_select")
 
+    def _esim_profiles(self) -> list[dict[str, str]]:
+        """Return selectable eSIM profiles for this modem."""
+        return [
+            profile
+            for profile in self.coordinator.esim_profiles_for_modem(self._modem_id)
+            if profile.get("profile_set", "1") == "1"
+        ]
+
+    @property
+    @override
+    def options(self) -> list[str]:
+        """Return physical slots and installed eSIM profiles."""
+        return self._physical_options + [
+            f"eSIM: {profile.get('name') or profile['id']}"
+            for profile in self._esim_profiles()
+        ]
+
     @property
     @override
     def current_option(self) -> str | None:
         """Return the active SIM."""
         modem = self.coordinator.data.modems.get(self._modem_id)
+        if modem and modem.esim_profile:
+            active = str(modem.esim_profile)
+            profile = next(
+                (
+                    item
+                    for item in self._esim_profiles()
+                    if str(item.get("id")) == active or str(item.get("name")) == active
+                ),
+                None,
+            )
+            return (
+                f"eSIM: {profile.get('name') or profile['id']}"
+                if profile
+                else (f"eSIM: {active}")
+            )
         return (
             f"SIM {modem.active_sim}" if modem and modem.active_sim in (1, 2) else None
         )
@@ -100,6 +132,15 @@ class TeltonikaSimSelect(TeltonikaBaseSelect):
     @override
     async def async_select_option(self, option: str) -> None:
         """Select a SIM."""
+        if option.startswith("eSIM: "):
+            selected = option.removeprefix("eSIM: ")
+            profile = next(
+                profile
+                for profile in self._esim_profiles()
+                if str(profile.get("name") or profile["id"]) == selected
+            )
+            await self.coordinator.async_select_esim_profile(str(profile["id"]))
+            return
         await self.coordinator.async_select_sim(self._modem_id, int(option[-1]))
 
 
@@ -117,9 +158,8 @@ class TeltonikaEsimSelect(TeltonikaBaseSelect):
     def _profiles(self) -> list[dict[str, str]]:
         return [
             profile
-            for profile in self.coordinator.data.esim_profiles
-            if str(profile.get("modem")) == self._modem_id
-            and profile.get("profile_set", "1") == "1"
+            for profile in self.coordinator.esim_profiles_for_modem(self._modem_id)
+            if profile.get("profile_set", "1") == "1"
         ]
 
     @property

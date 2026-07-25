@@ -62,6 +62,54 @@ class DataUsageTests(unittest.TestCase):
         )
 
 
+class ReverseGeocodingTests(unittest.TestCase):
+    """Test worldwide reverse-geocoding result extraction."""
+
+    def test_prefers_city_and_supports_villages(self) -> None:
+        self.assertEqual(
+            HELPERS.reverse_geocode_location_name(
+                {
+                    "display_name": "Berlin, Deutschland",
+                    "address": {"city": "Berlin", "country": "Deutschland"},
+                }
+            ),
+            "Berlin",
+        )
+        self.assertEqual(
+            HELPERS.reverse_geocode_location_name(
+                {"address": {"village": "Kallista", "country": "Australia"}}
+            ),
+            "Kallista",
+        )
+
+    def test_falls_back_to_display_name(self) -> None:
+        self.assertEqual(
+            HELPERS.reverse_geocode_location_name(
+                {"display_name": "Remote location, Antarctica"}
+            ),
+            "Remote location, Antarctica",
+        )
+        self.assertIsNone(HELPERS.reverse_geocode_location_name(None))
+
+
+class EsimProfileTests(unittest.TestCase):
+    """Test profile assignment for eSIM API variants."""
+
+    def test_assigns_profile_without_modem_on_single_modem_router(self) -> None:
+        profile = {"id": "1", "name": "Travel"}
+        self.assertEqual(
+            HELPERS.esim_profiles_for_modem([profile], ["1-1"], "1-1"),
+            [profile],
+        )
+
+    def test_does_not_guess_with_multiple_modems(self) -> None:
+        profile = {"id": "1", "name": "Travel"}
+        self.assertEqual(
+            HELPERS.esim_profiles_for_modem([profile], ["1-1", "2-1"], "1-1"),
+            [],
+        )
+
+
 class LocationTests(unittest.TestCase):
     """Test calculated location helpers."""
 
