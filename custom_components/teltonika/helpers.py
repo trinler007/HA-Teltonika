@@ -123,6 +123,30 @@ def supports_sim_switch(modem: Any) -> bool:
     )
 
 
+def modem_sim_switch_complete(
+    modem: Any,
+    expected_sim: int,
+    *,
+    expect_esim: bool,
+) -> bool:
+    """Return whether RutOS reports the selected SIM fully initialized."""
+    if getattr(modem, "active_sim", None) != expected_sim:
+        return False
+    if bool(getattr(modem, "esim_profile", None)) != expect_esim:
+        return False
+
+    mobile_stage = as_int(getattr(modem, "mobile_stage", None))
+    if mobile_stage is not None:
+        # RutOS mobile stage 19 is "Setup complete".
+        return mobile_stage == 19
+
+    # Older API variants may not expose mobile_stage. In that case, wait until
+    # registration data for the newly active SIM has become available.
+    return bool(
+        getattr(modem, "operator", None) or getattr(modem, "operator_state", None)
+    )
+
+
 def is_enabled(value: Any) -> bool:
     """Return whether an API value represents an enabled flag."""
     return (
