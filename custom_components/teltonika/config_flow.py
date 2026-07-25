@@ -15,7 +15,6 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME, CONF_VERIFY_SSL
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
@@ -390,7 +389,7 @@ class TeltonikaOptionsFlow(OptionsFlowWithReload):
                     vol.Coerce(int), vol.Range(min=10, max=3600)
                 ),
                 vol.Required(CONF_REVERSE_GEOCODING_ENABLED): bool,
-                vol.Required(CONF_REVERSE_GEOCODING_URL): cv.url,
+                vol.Required(CONF_REVERSE_GEOCODING_URL): str,
             }
         )
         return self.async_show_form(

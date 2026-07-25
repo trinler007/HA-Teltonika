@@ -131,9 +131,9 @@ Die Integration liest die vom Router gespeicherte Historie über
 bereit. Home Assistant kann diese Werte über die Geräteklasse automatisch in
 MB oder GB darstellen.
 
-Für Tageswerte wird MB als bevorzugte Anzeigeeinheit vorgeschlagen, für
-Monatswerte GB. Intern bleiben die Werte in Bytes erhalten, damit
-Langzeitstatistiken und Einheitenumrechnung korrekt funktionieren.
+Tageswerte werden nativ in MB, Monatswerte nativ in GB ausgegeben. Der exakte
+vom Router gelieferte Ausgangswert in Bytes bleibt jeweils als Attribut
+`raw_bytes` verfügbar.
 
 Laufende Zeiträume werden höchstens alle fünf Minuten abgefragt. Abgeschlossene
 Zeiträume werden zwischengespeichert und nur nach einem Tages- oder
