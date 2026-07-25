@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,6 +14,7 @@ HELPERS_PATH = (
 SPEC = importlib.util.spec_from_file_location("teltonika_helpers", HELPERS_PATH)
 assert SPEC is not None and SPEC.loader is not None
 HELPERS = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = HELPERS
 SPEC.loader.exec_module(HELPERS)
 
 
@@ -26,6 +28,89 @@ class ConversionTests(unittest.TestCase):
     def test_invalid_values(self) -> None:
         self.assertIsNone(HELPERS.as_float("N/A"))
         self.assertIsNone(HELPERS.as_int(None))
+
+
+class MobileConnectionAssessmentTests(unittest.TestCase):
+    """Test radio quality and capacity estimation."""
+
+    def test_5g_nsa_carrier_aggregation(self) -> None:
+        modem = SimpleNamespace(
+            conntype="5G (NSA)",
+            data_conn_state="Connected",
+            operator_state="Registered, home",
+            rsrp=-86,
+            rsrq=-7,
+            sinr=13,
+            rssi=-58,
+            band="5G N78",
+            ca_signal=[
+                SimpleNamespace(band="LTE B1", bandwidth="20", nr_arfcn=None),
+                SimpleNamespace(band="LTE B7", bandwidth="20", nr_arfcn=None),
+                SimpleNamespace(band="LTE B20", bandwidth="10", nr_arfcn=None),
+                SimpleNamespace(band="5G N78", bandwidth="80", nr_arfcn=631968),
+            ],
+            cell_info=[],
+        )
+
+        result = HELPERS.assess_mobile_connection(modem)
+
+        self.assertTrue(result.connected)
+        self.assertEqual(result.technology, "5G NSA")
+        self.assertEqual(result.quality, "very_good")
+        self.assertEqual(result.carrier_count, 4)
+        self.assertEqual(result.total_bandwidth_mhz, 130)
+        self.assertEqual(result.radio_ceiling_mbps, 2440)
+        self.assertGreater(result.estimated_high_mbps, result.estimated_low_mbps)
+        self.assertEqual(result.confidence, "high")
+
+        description = HELPERS.describe_mobile_connection(result, "de-DE")
+        self.assertIn("5G NSA", description)
+        self.assertIn("4 Funkträger", description)
+        self.assertIn("Megabit pro Sekunde", description)
+        self.assertLessEqual(len(description), 255)
+        self.assertLessEqual(len(HELPERS.describe_mobile_connection(result, "en")), 255)
+
+    def test_disconnected_modem_has_no_capacity(self) -> None:
+        modem = SimpleNamespace(
+            conntype="LTE",
+            data_conn_state="Disconnected",
+            operator_state="Registered, home",
+            ca_signal=[],
+            cell_info=[],
+            band=None,
+        )
+
+        result = HELPERS.assess_mobile_connection(modem)
+
+        self.assertFalse(result.connected)
+        self.assertEqual(result.quality, "disconnected")
+        self.assertIsNone(result.estimated_high_mbps)
+        self.assertEqual(
+            HELPERS.describe_mobile_connection(result, "en"),
+            "The cellular connection is currently disconnected.",
+        )
+
+    def test_single_lte_carrier_uses_serving_cell_bandwidth(self) -> None:
+        modem = SimpleNamespace(
+            conntype="4G LTE",
+            data_conn_state="Connected",
+            operator_state="Registered, roaming",
+            rsrp=-105,
+            rsrq=-14,
+            sinr=2,
+            rssi=-80,
+            ca_signal=[],
+            cell_info=[SimpleNamespace(band=None, bandwidth="20", nr_arfcn="N/A")],
+            band="LTE B20",
+        )
+
+        result = HELPERS.assess_mobile_connection(modem)
+
+        self.assertEqual(result.technology, "4G LTE")
+        self.assertEqual(result.total_bandwidth_mhz, 20)
+        self.assertEqual(result.radio_ceiling_mbps, 400)
+        self.assertEqual(result.carrier_count, 1)
+        self.assertEqual(result.bands, ("LTE B20",))
 
 
 class DataUsageTests(unittest.TestCase):

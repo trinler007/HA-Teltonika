@@ -109,6 +109,12 @@
       "connection_type": {
         "name": "{modem_name} Connection type"
       },
+      "connection_quality_description": {
+        "name": "{modem_name} Connection quality description"
+      },
+      "estimated_download_capacity": {
+        "name": "{modem_name} Estimated download capacity"
+      },
       "operator": {
         "name": "{modem_name} Operator"
       },

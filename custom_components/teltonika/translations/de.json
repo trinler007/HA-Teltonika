@@ -108,6 +108,12 @@
       "connection_type": {
         "name": "{modem_name} Verbindungstyp"
       },
+      "connection_quality_description": {
+        "name": "{modem_name} Beschreibung der Verbindungsqualität"
+      },
+      "estimated_download_capacity": {
+        "name": "{modem_name} Geschätzte Download-Kapazität"
+      },
       "esim_profile": {
         "name": "{modem_name} eSIM-Profil"
       },

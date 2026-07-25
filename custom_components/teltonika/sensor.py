@@ -16,6 +16,7 @@ from homeassistant.const import (
     DEGREE,
     SIGNAL_STRENGTH_DECIBELS,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+    UnitOfDataRate,
     UnitOfInformation,
     UnitOfLength,
     UnitOfSpeed,
@@ -33,8 +34,11 @@ from . import TeltonikaConfigEntry
 from .const import CONF_HOME_LATITUDE, CONF_HOME_LONGITUDE
 from .coordinator import TeltonikaDataUpdateCoordinator
 from .helpers import (
+    MobileConnectionAssessment,
     as_float,
     as_int,
+    assess_mobile_connection,
+    describe_mobile_connection,
     distance_km,
     interface_ip_address,
     maidenhead_locator,
@@ -251,6 +255,14 @@ async def async_setup_entry(
             for modem_id in new_modems
             for description in MODEM_SENSORS
         ]
+        entities.extend(
+            entity
+            for modem_id in new_modems
+            for entity in (
+                TeltonikaEstimatedCapacitySensor(coordinator, modem_id),
+                TeltonikaConnectionDescriptionSensor(coordinator, modem_id),
+            )
+        )
         if not globals_added:
             entities.extend(
                 TeltonikaGpsSensor(coordinator, description)
@@ -350,6 +362,103 @@ class TeltonikaModemSensor(TeltonikaBaseSensor):
                 for signal in (modem.ca_signal or [])
             ],
         }
+
+
+class TeltonikaModemAssessmentSensor(TeltonikaBaseSensor):
+    """Base class for calculated cellular connection sensors."""
+
+    def __init__(
+        self,
+        coordinator: TeltonikaDataUpdateCoordinator,
+        modem_id: str,
+        unique_suffix: str,
+    ) -> None:
+        """Initialize a calculated modem sensor."""
+        super().__init__(coordinator, f"{modem_id}_{unique_suffix}")
+        self._modem_id = modem_id
+        modem = coordinator.data.modems[modem_id]
+        self._attr_translation_placeholders = {
+            "modem_name": modem.name or f"Modem {modem_id}"
+        }
+
+    @property
+    @override
+    def available(self) -> bool:
+        """Return whether the modem is available."""
+        return super().available and self._modem_id in self.coordinator.data.modems
+
+    @property
+    def assessment(self) -> MobileConnectionAssessment:
+        """Return the current calculated connection assessment."""
+        return assess_mobile_connection(self.coordinator.data.modems[self._modem_id])
+
+    @property
+    @override
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the factors used for the estimate."""
+        assessment = self.assessment
+        return {
+            "quality": assessment.quality,
+            "quality_score": assessment.quality_score,
+            "technology": assessment.technology,
+            "limiting_factor": assessment.limiting_factor,
+            "carrier_count": assessment.carrier_count,
+            "bands": list(assessment.bands),
+            "total_bandwidth_mhz": assessment.total_bandwidth_mhz,
+            "estimated_low_mbps": assessment.estimated_low_mbps,
+            "estimated_high_mbps": assessment.estimated_high_mbps,
+            "radio_ceiling_mbps": assessment.radio_ceiling_mbps,
+            "confidence": assessment.confidence,
+            "is_estimate": True,
+            "unknown_factors": [
+                "cell_load",
+                "provider_policy",
+                "backhaul",
+                "protocol_overhead",
+            ],
+        }
+
+
+class TeltonikaEstimatedCapacitySensor(TeltonikaModemAssessmentSensor):
+    """Estimated plausible peak download capacity."""
+
+    _attr_translation_key = "estimated_download_capacity"
+    _attr_device_class = SensorDeviceClass.DATA_RATE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfDataRate.MEGABITS_PER_SECOND
+    _attr_suggested_display_precision = 0
+
+    def __init__(
+        self, coordinator: TeltonikaDataUpdateCoordinator, modem_id: str
+    ) -> None:
+        """Initialize the estimated capacity sensor."""
+        super().__init__(coordinator, modem_id, "estimated_download_capacity")
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        """Return the upper end of the plausible peak range."""
+        return self.assessment.estimated_high_mbps
+
+
+class TeltonikaConnectionDescriptionSensor(TeltonikaModemAssessmentSensor):
+    """Voice-assistant-friendly cellular connection description."""
+
+    _attr_translation_key = "connection_quality_description"
+
+    def __init__(
+        self, coordinator: TeltonikaDataUpdateCoordinator, modem_id: str
+    ) -> None:
+        """Initialize the connection description sensor."""
+        super().__init__(coordinator, modem_id, "connection_quality_description")
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        """Return a localized, concise description of the mobile connection."""
+        return describe_mobile_connection(
+            self.assessment, self.coordinator.hass.config.language
+        )
 
 
 class TeltonikaGpsSensor(TeltonikaBaseSensor):

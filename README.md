@@ -22,6 +22,8 @@ und ergänzt insbesondere Funktionen für den Teltonika RUTX50 mit RutOS 7.24.x.
 - optionaler weltweiter Ortsnamensensor über einen konfigurierbaren
   Nominatim-kompatiblen Reverse-Geocoding-Dienst
 - Primärband sowie alle aktiven Carrier-Aggregation-Bänder mit Signaldetails
+- geschätzte Download-Spitzenkapazität aus Funkstandard, Kanalbandbreite und
+  Signalqualität sowie eine für Sprachassistenten geeignete Beschreibung
 - IMEI, UICC/ICCID und Mobilfunk-Registrierungsstatus
 - aktive physische SIM als Sensor und auswählbare `select`-Entität
 - je ein Aktionsbutton für SIM 1 und SIM 2
@@ -91,6 +93,25 @@ NMEA-Stream aktuell.
 IMEI und UICC/ICCID sind eindeutige Geräte- beziehungsweise
 Teilnehmerkennungen. Bei der Weitergabe von Screenshots oder Diagnosedaten
 sollten diese Werte anonymisiert werden.
+
+## Verbindungsqualität und geschätzte Kapazität
+
+Der Sensor **Geschätzte Download-Kapazität** berechnet aus dem Funkstandard,
+den aktiven CA-Trägern, deren Kanalbandbreiten sowie RSRP, RSRQ und SINR die
+obere Grenze eines plausiblen Download-Spitzenbereichs in Mbit/s. Die Attribute
+enthalten zusätzlich die untere Grenze, den Signal-Qualitätswert, den
+limitierenden Funkwert, die verwendeten Bänder, die gesamte Kanalbandbreite,
+eine Vertrauensstufe und die rein technische Funkobergrenze.
+
+Der Sensor **Beschreibung der Verbindungsqualität** fasst dieselben Daten als
+kurzen deutschen beziehungsweise englischen Text zusammen. Er eignet sich
+damit beispielsweise als Antwort eines Sprachassistenten.
+
+Beide Werte sind Schätzungen der Funkstrecke und keine Geschwindigkeitsmessung.
+Aus dem Routerstatus sind insbesondere Zellenauslastung, Drosselung durch den
+Provider, Kapazität der Basisstationsanbindung und Protokoll-Overhead nicht
+bekannt. Die genannte Spanne gilt deshalb nur als unter günstigen Bedingungen
+plausible Spitzenrate und kann deutlich von einem Speedtest abweichen.
 
 ## Installation
 
