@@ -61,6 +61,60 @@ class DataUsageTests(unittest.TestCase):
             )
         )
 
+    def test_sim_switch_waits_for_target_and_setup_complete(self) -> None:
+        modem = SimpleNamespace(
+            active_sim=2,
+            esim_profile=None,
+            mobile_stage=18,
+            operator="Telekom.de",
+            operator_state="registered",
+        )
+        self.assertFalse(
+            HELPERS.modem_sim_switch_complete(
+                modem,
+                2,
+                expect_esim=False,
+            )
+        )
+        modem.mobile_stage = 19
+        self.assertTrue(
+            HELPERS.modem_sim_switch_complete(
+                modem,
+                2,
+                expect_esim=False,
+            )
+        )
+        self.assertFalse(
+            HELPERS.modem_sim_switch_complete(
+                modem,
+                1,
+                expect_esim=False,
+            )
+        )
+
+    def test_sim_switch_distinguishes_physical_sim_and_esim(self) -> None:
+        modem = SimpleNamespace(
+            active_sim=2,
+            esim_profile="1",
+            mobile_stage=None,
+            operator="o2 - de",
+            operator_state="registered",
+        )
+        self.assertTrue(
+            HELPERS.modem_sim_switch_complete(
+                modem,
+                2,
+                expect_esim=True,
+            )
+        )
+        self.assertFalse(
+            HELPERS.modem_sim_switch_complete(
+                modem,
+                2,
+                expect_esim=False,
+            )
+        )
+
 
 class ReverseGeocodingTests(unittest.TestCase):
     """Test worldwide reverse-geocoding result extraction."""

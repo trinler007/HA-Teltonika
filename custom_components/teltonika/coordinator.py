@@ -41,6 +41,7 @@ from .helpers import (
     esim_sim_card_for_modem,
     is_enabled,
     is_esim_sim_card,
+    modem_sim_switch_complete,
     reverse_geocode_location_name,
     supports_sim_switch,
 )
@@ -56,8 +57,9 @@ NMEA_STATUS_TIMEOUT = 30
 TRAFFIC_REFRESH_INTERVAL = 300
 GEOCODING_REFRESH_INTERVAL = 900
 GEOCODING_MIN_DISTANCE_KM = 1.0
+SIM_SWITCH_POLL_DELAYS = (2, 3, 5, 5, 5, 5, 5)
 GEOCODING_USER_AGENT = (
-    "HA-Teltonika/0.5.2 (+https://github.com/trinler007/HA-Teltonika)"
+    "HA-Teltonika/0.5.3 (+https://github.com/trinler007/HA-Teltonika)"
 )
 
 
@@ -515,6 +517,11 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         )
         if physical_sim is not None:
             await self._async_activate_sim_card(modem_id, physical_sim)
+            await self._async_wait_for_sim_switch(
+                modem_id,
+                sim,
+                expect_esim=False,
+            )
             await self.async_request_refresh()
             return
 
@@ -536,6 +543,11 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
                     return
 
         await self.client.switch_sim(modem_id)
+        await self._async_wait_for_sim_switch(
+            modem_id,
+            sim,
+            expect_esim=False,
+        )
         await self.async_request_refresh()
 
     async def async_activate_esim(self, modem_id: str) -> None:
@@ -553,6 +565,11 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             )
 
         await self._async_activate_sim_card(modem_id, sim_card)
+        await self._async_wait_for_sim_switch(
+            modem_id,
+            as_int(sim_card.get("position")) or modem.active_sim,
+            expect_esim=True,
+        )
         for delay in (2, 3, 5):
             await asyncio.sleep(delay)
             profiles = await self._async_optional_data("esim/config")
@@ -614,6 +631,48 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         )
         if not response.get("success"):
             raise TeltonikaConnectionError("Failed to make the default SIM active")
+
+    async def _async_wait_for_sim_switch(
+        self,
+        modem_id: str,
+        expected_sim: int,
+        *,
+        expect_esim: bool,
+    ) -> None:
+        """Poll modem status briefly until the selected SIM is initialized."""
+        for delay in SIM_SWITCH_POLL_DELAYS:
+            await asyncio.sleep(delay)
+            try:
+                response = await Modems(self.client.auth).get_status()
+            except TeltonikaConnectionError as err:
+                _LOGGER.debug(
+                    "Modem status unavailable while waiting for SIM switch: %s",
+                    err,
+                )
+                continue
+            if not response.success:
+                continue
+            modems = {
+                modem.id: modem
+                for modem in (response.data or [])
+                if isinstance(modem, ModemStatusFull)
+            }
+            if not modems:
+                continue
+            self.async_set_updated_data(replace(self.data, modems=modems))
+            modem = modems.get(modem_id)
+            if modem is not None and modem_sim_switch_complete(
+                modem,
+                expected_sim,
+                expect_esim=expect_esim,
+            ):
+                return
+        _LOGGER.debug(
+            "SIM switch to %s on modem %s is still initializing; "
+            "regular coordinator polling will continue",
+            "eSIM" if expect_esim else f"SIM {expected_sim}",
+            modem_id,
+        )
 
     def active_wan_interfaces(self) -> list[dict[str, Any]]:
         """Return active Internet-facing interfaces in router priority order."""

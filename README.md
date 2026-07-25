@@ -117,6 +117,11 @@ gewählte SIM nicht bereits aktiv ist. Wenn `/api/sim_cards/config` verfügbar
 ist, setzt die Integration den gewählten Eintrag direkt als Standard und
 startet die Mobilfunkverbindung neu. Bei älteren Dual-SIM-Geräten bleibt die
 Teltonika-Aktion „zur nächsten SIM wechseln“ als Fallback erhalten.
+Nach einer manuellen Umschaltung fragt die Integration vorübergehend nur den
+Modemstatus in kurzen Abständen ab. Betreiber, Registrierung, Signalwerte und
+weitere Mobilfunkdaten werden dadurch aktualisiert, sobald RutOS die Ziel-SIM
+als vollständig initialisiert meldet. Anschließend gilt wieder ausschließlich
+das konfigurierte reguläre Pollingintervall.
 
 Auf eSIM-fähiger Hardware enthält die gemeinsame SIM-Quellenauswahl zusätzlich
 `eSIM`, auch wenn `/api/esim/config` bei aktiver physischer SIM noch keine
