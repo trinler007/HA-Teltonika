@@ -88,16 +88,37 @@ cards:
 Bei RUTX50-eSIM-Hardware kann eine weitere Tile Card für die erzeugte
 `select.*_active_esim_profile`-Entität ergänzt werden.
 
-## Quellen und Kompatibilität
+## Quellen, Herkunft und Markenrechte
 
-- [Home-Assistant-Core-Integration](https://github.com/home-assistant/core/tree/dev/homeassistant/components/teltonika)
+Für Entwicklung und Dokumentation wurden insbesondere folgende Quellen
+verwendet:
+
+- [Home-Assistant-Core-Integration `teltonika`](https://github.com/home-assistant/core/tree/dev/homeassistant/components/teltonika);
+  die konkrete Upstream-Basis ist
+  [Commit `702a9cb`](https://github.com/home-assistant/core/commit/702a9cb7289e535927f5279190bcad6ffc5d3fd0)
+- [`teltasync`](https://codeberg.org/dmho/teltasync), die von der
+  Home-Assistant-Integration verwendete API-Clientbibliothek
 - [Teltonika RUTX50 API 7.24.1](https://developers.teltonika-networks.com/reference/RUTX50/7.24.1/)
-- [RUTX50-Handbuch](https://wiki.teltonika-networks.com/view/RUTX50_Manual)
+- [Teltonika RUTX50 Manual](https://wiki.teltonika-networks.com/view/RUTX50_Manual)
+- [offizielle Teltonika Brand Guidelines und Brand Assets](https://www.teltonika-iot-group.com/brand-guidelines)
+
+Der von Home Assistant abgeleitete Quellcode und `teltasync` stehen unter der
+Apache License 2.0. Änderungen und Ergänzungen dieses Projekts werden ebenfalls
+unter der in [LICENSE.md](LICENSE.md) enthaltenen Apache License 2.0
+bereitgestellt.
+
+**Markenhinweis:** Teltonika, die Namen der Teltonika-Produkte, das
+Teltonika-Logo und weitere Markenelemente gehören den jeweiligen Unternehmen
+der Teltonika-Gruppe. Dieses unabhängige Open-Source-Projekt ist weder mit
+Teltonika verbunden noch von Teltonika gesponsert oder offiziell unterstützt.
+Das in `custom_components/teltonika/brand` enthaltene offizielle Logo wird
+ausschließlich zur Identifikation der unterstützten Produkte verwendet. Für
+seine Verwendung gelten die Teltonika Brand Guidelines; durch die
+Apache-2.0-Lizenz dieses Projekts werden keine Rechte an Namen, Marken oder
+Logos von Teltonika eingeräumt.
 
 Die API-Felder wurden gegen RutOS 7.24.1 / Web API v1.16.1 entwickelt. Ältere
-Firmware kann weniger Entitäten bereitstellen. Der eigentliche Routerzugriff
-verwendet weiterhin die auch von Home Assistant eingesetzte Bibliothek
-`teltasync`.
+Firmware kann weniger Entitäten bereitstellen.
 
 ## Entwicklung
 
