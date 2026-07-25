@@ -83,7 +83,10 @@ sollte deshalb nur in einem vertrauenswürdigen lokalen Netz freigegeben werden.
 Das reguläre Router-API-Abfrageintervall kann auf derselben Optionsseite
 zwischen 10 und 3600 Sekunden eingestellt werden; Standard sind 30 Sekunden.
 NMEA-Liveaktualisierungen und die gedrosselte Datenverbrauchsabfrage sind davon
-unabhängig.
+unabhängig. Eingehende NMEA-Sätze benachrichtigen die GPS-Entitäten direkt,
+ohne den Timer des regulären API-Pollings zurückzusetzen. Dadurch bleiben
+Mobilfunk-, SIM- und Interfacewerte auch bei einem kontinuierlichen
+NMEA-Stream aktuell.
 
 IMEI und UICC/ICCID sind eindeutige Geräte- beziehungsweise
 Teilnehmerkennungen. Bei der Weitergabe von Screenshots oder Diagnosedaten
