@@ -3,9 +3,324 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
+from itertools import pairwise
 from typing import Any
 
 EARTH_RADIUS_KM = 6371.0088
+
+
+@dataclass(frozen=True)
+class MobileConnectionAssessment:
+    """Calculated cellular quality and plausible peak capacity."""
+
+    connected: bool
+    technology: str
+    quality: str
+    quality_score: int | None
+    limiting_factor: str | None
+    carrier_count: int
+    bands: tuple[str, ...]
+    total_bandwidth_mhz: float | None
+    estimated_low_mbps: int | None
+    estimated_high_mbps: int | None
+    radio_ceiling_mbps: int | None
+    confidence: str
+
+
+def _interpolated_score(
+    value: Any, points: tuple[tuple[float, float], ...]
+) -> float | None:
+    """Map a radio measurement to a score from zero to one hundred."""
+    numeric = as_float(value)
+    if numeric is None:
+        return None
+    if numeric <= points[0][0]:
+        return points[0][1]
+    if numeric >= points[-1][0]:
+        return points[-1][1]
+    for (low_value, low_score), (high_value, high_score) in pairwise(points):
+        if low_value <= numeric <= high_value:
+            fraction = (numeric - low_value) / (high_value - low_value)
+            return low_score + fraction * (high_score - low_score)
+    return None
+
+
+def _radio_metrics(modem: Any) -> dict[str, float]:
+    """Return normalized scores for available cellular radio metrics."""
+    definitions = {
+        "rsrp": ((-120, 0), (-110, 25), (-100, 50), (-90, 75), (-80, 100)),
+        "rsrq": ((-20, 0), (-15, 40), (-10, 75), (-7, 100)),
+        "sinr": ((-5, 0), (0, 25), (10, 60), (20, 85), (30, 100)),
+        "rssi": ((-110, 0), (-95, 30), (-85, 55), (-75, 80), (-65, 100)),
+    }
+    return {
+        name: score
+        for name, points in definitions.items()
+        if (score := _interpolated_score(getattr(modem, name, None), points))
+        is not None
+    }
+
+
+def _connection_technology(modem: Any) -> str:
+    """Return a normalized, readable radio access technology."""
+    value = str(
+        getattr(modem, "conntype", None) or getattr(modem, "ntype", None) or "Mobilfunk"
+    )
+    normalized = value.lower().replace("_", " ").replace("-", " ")
+    if "5g" in normalized and "nsa" in normalized:
+        return "5G NSA"
+    if "5g" in normalized and "sa" in normalized:
+        return "5G SA"
+    if "5g" in normalized:
+        return "5G"
+    if "lte" in normalized or "4g" in normalized:
+        return "4G LTE"
+    if "3g" in normalized or "umts" in normalized or "wcdma" in normalized:
+        return "3G"
+    if "2g" in normalized or "gsm" in normalized:
+        return "2G"
+    return value
+
+
+def _carrier_values(modem: Any) -> list[Any]:
+    """Return CA carriers, falling back to serving-cell information."""
+    carriers = list(getattr(modem, "ca_signal", None) or [])
+    return carriers or list(getattr(modem, "cell_info", None) or [])
+
+
+def _is_nr_carrier(carrier: Any, technology: str) -> bool:
+    """Return whether a carrier is a 5G NR carrier."""
+    band = str(getattr(carrier, "band", "") or "").lower()
+    if "5g" in band or " nr" in f" {band}" or band.startswith("n"):
+        return True
+    nr_arfcn = getattr(carrier, "nr_arfcn", None)
+    if nr_arfcn not in (None, "", "N/A"):
+        return True
+    return technology in {"5G", "5G SA"} and not band
+
+
+def assess_mobile_connection(modem: Any) -> MobileConnectionAssessment:
+    """Estimate radio quality and plausible peak download capacity.
+
+    The result describes radio-link potential. It intentionally does not claim
+    to predict current throughput because cell load, provider policy, backhaul,
+    and protocol overhead are not available from the modem status endpoint.
+    """
+    technology = _connection_technology(modem)
+    state = str(getattr(modem, "data_conn_state", "") or "").lower()
+    registered = str(getattr(modem, "operator_state", "") or "").lower()
+    connected = (
+        not state or ("connected" in state and "disconnected" not in state)
+    ) and (
+        not registered
+        or (
+            "registered" in registered
+            and "not registered" not in registered
+            and "unregistered" not in registered
+        )
+    )
+
+    metrics = _radio_metrics(modem)
+    weighted_metrics = [
+        (metrics[name], weight)
+        for name, weight in (("rsrp", 0.35), ("rsrq", 0.25), ("sinr", 0.40))
+        if name in metrics
+    ]
+    if not weighted_metrics and "rssi" in metrics:
+        weighted_metrics = [(metrics["rssi"], 1.0)]
+    quality_score = (
+        round(
+            sum(score * weight for score, weight in weighted_metrics)
+            / sum(weight for _, weight in weighted_metrics)
+        )
+        if weighted_metrics
+        else None
+    )
+    if not connected:
+        quality = "disconnected"
+    elif quality_score is None:
+        quality = "unknown"
+    elif quality_score >= 85:
+        quality = "excellent"
+    elif quality_score >= 70:
+        quality = "very_good"
+    elif quality_score >= 55:
+        quality = "good"
+    elif quality_score >= 40:
+        quality = "fair"
+    else:
+        quality = "poor"
+
+    limiting_factor = min(metrics, key=metrics.get) if metrics else None
+    carriers = _carrier_values(modem)
+    bands = tuple(
+        dict.fromkeys(
+            str(band)
+            for carrier in carriers
+            if (band := getattr(carrier, "band", None))
+        )
+    )
+    if not bands and (primary_band := getattr(modem, "band", None)):
+        bands = (str(primary_band),)
+
+    bandwidths: list[tuple[float, bool]] = []
+    for carrier in carriers:
+        bandwidth = as_float(getattr(carrier, "bandwidth", None))
+        if bandwidth is not None and bandwidth > 0:
+            bandwidths.append((bandwidth, _is_nr_carrier(carrier, technology)))
+    total_bandwidth = (
+        round(sum(bandwidth for bandwidth, _ in bandwidths), 1) if bandwidths else None
+    )
+
+    hardware_cap = 42
+    assumed_ceiling = 42.0
+    if technology == "5G NSA":
+        hardware_cap = 3300
+        assumed_ceiling = 1500.0
+    elif technology in {"5G", "5G SA"}:
+        hardware_cap = 2100
+        assumed_ceiling = 1800.0
+    elif technology == "4G LTE":
+        hardware_cap = 2000
+        assumed_ceiling = 400.0
+    elif technology == "2G":
+        hardware_cap = 1
+        assumed_ceiling = 0.3
+
+    if bandwidths:
+        # Approximate the radio ceiling from occupied spectrum. The constants
+        # assume the modem's best supported MIMO/modulation and are capped by
+        # the published RUTX50 modem limits.
+        raw_ceiling = sum(
+            bandwidth * (18 if is_nr else 20) for bandwidth, is_nr in bandwidths
+        )
+        radio_ceiling = min(float(hardware_cap), raw_ceiling)
+    else:
+        radio_ceiling = min(float(hardware_cap), assumed_ceiling)
+
+    if connected and quality_score is not None:
+        upper_factor = 0.25 + 0.007 * quality_score
+        estimated_high = max(1, round(radio_ceiling * upper_factor / 10) * 10)
+        estimated_low = max(1, round(estimated_high * 0.45 / 10) * 10)
+    else:
+        estimated_low = estimated_high = None
+
+    if bandwidths and len(metrics) >= 2:
+        confidence = "high"
+    elif bandwidths or metrics:
+        confidence = "medium"
+    else:
+        confidence = "low"
+
+    return MobileConnectionAssessment(
+        connected=connected,
+        technology=technology,
+        quality=quality,
+        quality_score=quality_score,
+        limiting_factor=limiting_factor,
+        carrier_count=len(carriers) or (1 if bands else 0),
+        bands=bands,
+        total_bandwidth_mhz=total_bandwidth,
+        estimated_low_mbps=estimated_low,
+        estimated_high_mbps=estimated_high,
+        radio_ceiling_mbps=round(radio_ceiling),
+        confidence=confidence,
+    )
+
+
+def describe_mobile_connection(
+    assessment: MobileConnectionAssessment, language: str
+) -> str:
+    """Render a concise voice-assistant-friendly connection description."""
+    german = language.lower().startswith("de")
+    if not assessment.connected:
+        return (
+            "Die Mobilfunkverbindung ist derzeit nicht verbunden."
+            if german
+            else "The cellular connection is currently disconnected."
+        )
+
+    quality_labels = {
+        "de": {
+            "excellent": "ausgezeichnet",
+            "very_good": "sehr gut",
+            "good": "gut",
+            "fair": "mäßig",
+            "poor": "schlecht",
+            "unknown": "nicht sicher bewertbar",
+        },
+        "en": {
+            "excellent": "excellent",
+            "very_good": "very good",
+            "good": "good",
+            "fair": "fair",
+            "poor": "poor",
+            "unknown": "not reliably assessable",
+        },
+    }
+    factor_labels = {
+        "de": {
+            "rsrp": "die Signalstärke",
+            "rsrq": "die Signalqualität",
+            "sinr": "Störungen und Rauschen",
+            "rssi": "die Signalstärke",
+        },
+        "en": {
+            "rsrp": "signal strength",
+            "rsrq": "signal quality",
+            "sinr": "interference and noise",
+            "rssi": "signal strength",
+        },
+    }
+    locale = "de" if german else "en"
+    quality = quality_labels[locale][assessment.quality]
+    shown_bands = ", ".join(assessment.bands[:4])
+    if len(assessment.bands) > 4:
+        shown_bands += f" +{len(assessment.bands) - 4}"
+
+    if german:
+        parts = [f"Verbindung über {assessment.technology}: {quality}."]
+        if assessment.carrier_count:
+            carrier_text = f"{assessment.carrier_count} Funkträger" + (
+                f" auf {shown_bands}" if shown_bands else ""
+            )
+            if assessment.total_bandwidth_mhz is not None:
+                carrier_text += f" mit {assessment.total_bandwidth_mhz:g} Megahertz"
+            parts.append(f"Aktiv sind {carrier_text}.")
+        if assessment.limiting_factor:
+            parts.append(
+                "Vor allem begrenzt durch "
+                f"{factor_labels[locale][assessment.limiting_factor]}."
+            )
+        if assessment.estimated_low_mbps is not None:
+            parts.append(
+                "Bei geringer Netzauslastung: "
+                f"{assessment.estimated_low_mbps} bis "
+                f"{assessment.estimated_high_mbps} Megabit pro Sekunde "
+                "im Download."
+            )
+        return " ".join(parts)
+
+    parts = [f"{assessment.technology} connection: {quality}."]
+    if assessment.carrier_count:
+        carrier_text = f"{assessment.carrier_count} carriers" + (
+            f" on {shown_bands}" if shown_bands else ""
+        )
+        if assessment.total_bandwidth_mhz is not None:
+            carrier_text += f" using {assessment.total_bandwidth_mhz:g} megahertz"
+        parts.append(f"Active: {carrier_text}.")
+    if assessment.limiting_factor:
+        parts.append(
+            f"Mainly limited by {factor_labels[locale][assessment.limiting_factor]}."
+        )
+    if assessment.estimated_low_mbps is not None:
+        parts.append(
+            "With low cell load: "
+            f"{assessment.estimated_low_mbps} to "
+            f"{assessment.estimated_high_mbps} megabits per second downlink."
+        )
+    return " ".join(parts)
 
 
 def as_float(value: Any) -> float | None:
