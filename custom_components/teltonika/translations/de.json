@@ -44,14 +44,18 @@
       "init": {
         "data": {
           "home_latitude": "Breitengrad der Heimatposition",
-          "home_longitude": "Längengrad der Heimatposition"
+          "home_longitude": "Längengrad der Heimatposition",
+          "nmea_enabled": "TCP-NMEA-Empfänger aktivieren",
+          "nmea_port": "NMEA-TCP-Port"
         },
         "data_description": {
           "home_latitude": "Breitengrad zur Berechnung der Entfernung nach Hause. Standardmäßig wird die Heimatposition von Home Assistant verwendet.",
-          "home_longitude": "Längengrad zur Berechnung der Entfernung nach Hause. Standardmäßig wird die Heimatposition von Home Assistant verwendet."
+          "home_longitude": "Längengrad zur Berechnung der Entfernung nach Hause. Standardmäßig wird die Heimatposition von Home Assistant verwendet.",
+          "nmea_enabled": "Einen vom Router gesendeten GPS-NMEA-Stream empfangen. Aktuelle Stream-Daten ersetzen das GPS-API-Polling.",
+          "nmea_port": "TCP-Port, auf dem Home Assistant den NMEA-Stream des Routers annimmt. Bei Teltonika ist Port 8500 üblich."
         },
-        "description": "Konfiguriere die Heimatposition für den berechneten GPS-Entfernungssensor.",
-        "title": "GPS-Heimatposition"
+        "description": "Konfiguriere die berechneten GPS-Sensoren und den optionalen Live-NMEA-Stream.",
+        "title": "GPS-Optionen"
       }
     }
   },

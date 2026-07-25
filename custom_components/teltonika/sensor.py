@@ -369,6 +369,16 @@ class TeltonikaGpsSensor(TeltonikaBaseSensor):
         """Return the current GPS value."""
         return self.entity_description.value_fn(self.coordinator.data.gps or {})
 
+    @property
+    @override
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the active GPS data source and stream timestamp."""
+        gps = self.coordinator.data.gps or {}
+        return {
+            "source": gps.get("source", "api"),
+            "received_at": gps.get("received_at"),
+        }
+
 
 class TeltonikaActiveWanSensor(TeltonikaBaseSensor):
     """Sensor showing the active Internet connection."""

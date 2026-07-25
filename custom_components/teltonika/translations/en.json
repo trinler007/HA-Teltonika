@@ -44,14 +44,18 @@
       "init": {
         "data": {
           "home_latitude": "Home latitude",
-          "home_longitude": "Home longitude"
+          "home_longitude": "Home longitude",
+          "nmea_enabled": "Enable TCP NMEA receiver",
+          "nmea_port": "NMEA TCP port"
         },
         "data_description": {
           "home_latitude": "Latitude used to calculate the distance from home. Defaults to the Home Assistant home position.",
-          "home_longitude": "Longitude used to calculate the distance from home. Defaults to the Home Assistant home position."
+          "home_longitude": "Longitude used to calculate the distance from home. Defaults to the Home Assistant home position.",
+          "nmea_enabled": "Listen for a GPS NMEA stream sent by the router. Fresh stream data replaces GPS API polling.",
+          "nmea_port": "TCP port on which Home Assistant accepts the router's NMEA stream. The usual Teltonika port is 8500."
         },
-        "description": "Configure the home position used by the calculated GPS distance sensor.",
-        "title": "GPS home position"
+        "description": "Configure the calculated GPS sensors and the optional live NMEA stream.",
+        "title": "GPS options"
       }
     }
   },

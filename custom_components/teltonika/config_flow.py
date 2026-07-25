@@ -20,7 +20,14 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.service_info.dhcp import DhcpServiceInfo
 from teltasync import Teltasync, TeltonikaAuthenticationError, TeltonikaConnectionError
 
-from .const import CONF_HOME_LATITUDE, CONF_HOME_LONGITUDE, DOMAIN
+from .const import (
+    CONF_HOME_LATITUDE,
+    CONF_HOME_LONGITUDE,
+    CONF_NMEA_ENABLED,
+    CONF_NMEA_PORT,
+    DEFAULT_NMEA_PORT,
+    DOMAIN,
+)
 from .util import get_url_variants
 
 _LOGGER = logging.getLogger(__name__)
@@ -346,6 +353,10 @@ class TeltonikaOptionsFlow(OptionsFlowWithReload):
             CONF_HOME_LONGITUDE: self.config_entry.options.get(
                 CONF_HOME_LONGITUDE, self.hass.config.longitude
             ),
+            CONF_NMEA_ENABLED: self.config_entry.options.get(CONF_NMEA_ENABLED, False),
+            CONF_NMEA_PORT: self.config_entry.options.get(
+                CONF_NMEA_PORT, DEFAULT_NMEA_PORT
+            ),
         }
         schema = vol.Schema(
             {
@@ -354,6 +365,10 @@ class TeltonikaOptionsFlow(OptionsFlowWithReload):
                 ),
                 vol.Required(CONF_HOME_LONGITUDE): vol.All(
                     vol.Coerce(float), vol.Range(min=-180, max=180)
+                ),
+                vol.Required(CONF_NMEA_ENABLED): bool,
+                vol.Required(CONF_NMEA_PORT): vol.All(
+                    vol.Coerce(int), vol.Range(min=1, max=65535)
                 ),
             }
         )

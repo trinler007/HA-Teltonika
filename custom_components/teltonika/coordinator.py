@@ -4,19 +4,27 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import timedelta
+from time import monotonic
 from typing import TYPE_CHECKING, Any, override
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 from teltasync import Teltasync, TeltonikaAuthenticationError, TeltonikaConnectionError
 from teltasync.modems import Modems, ModemStatusFull
 
-from .const import DOMAIN
+from .const import (
+    CONF_NMEA_ENABLED,
+    CONF_NMEA_PORT,
+    DEFAULT_NMEA_PORT,
+    DOMAIN,
+)
 from .helpers import active_wan_interfaces
+from .nmea import NmeaTcpServer
 
 if TYPE_CHECKING:
     from . import TeltonikaConfigEntry
@@ -24,6 +32,7 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 SCAN_INTERVAL = timedelta(seconds=30)
+NMEA_FALLBACK_TIMEOUT = 15
 
 
 @dataclass(slots=True)
@@ -61,6 +70,47 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         self.client = client
         self.base_url = base_url
         self.firmware_version: str | None = None
+        self._nmea_server: NmeaTcpServer | None = None
+        self._nmea_last_update: float | None = None
+
+    @property
+    def nmea_enabled(self) -> bool:
+        """Return whether the optional NMEA receiver is enabled."""
+        assert self.config_entry is not None
+        return bool(self.config_entry.options.get(CONF_NMEA_ENABLED, False))
+
+    @property
+    def nmea_active(self) -> bool:
+        """Return whether fresh NMEA data is currently available."""
+        return (
+            self._nmea_last_update is not None
+            and monotonic() - self._nmea_last_update < NMEA_FALLBACK_TIMEOUT
+        )
+
+    async def async_start_nmea(self) -> None:
+        """Start the optional TCP NMEA receiver."""
+        if not self.nmea_enabled:
+            return
+        assert self.config_entry is not None
+        port = int(self.config_entry.options.get(CONF_NMEA_PORT, DEFAULT_NMEA_PORT))
+        self._nmea_server = NmeaTcpServer(port, self._async_process_nmea)
+        await self._nmea_server.async_start()
+
+    async def async_stop_nmea(self) -> None:
+        """Stop the TCP NMEA receiver."""
+        if self._nmea_server is not None:
+            await self._nmea_server.async_stop()
+            self._nmea_server = None
+
+    @callback
+    def _async_process_nmea(self, update: dict[str, Any]) -> None:
+        """Merge a live NMEA update into coordinator data."""
+        gps = dict(self.data.gps or {})
+        gps.update(update)
+        gps["source"] = "nmea"
+        gps["received_at"] = dt_util.utcnow().isoformat()
+        self._nmea_last_update = monotonic()
+        self.async_set_updated_data(replace(self.data, gps=gps))
 
     @override
     async def _async_setup(self) -> None:
@@ -124,23 +174,32 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
                 )
                 raise UpdateFailed(error_message)
 
+            use_nmea = self.nmea_active
+            gps_from_api = None
             (
-                gps,
                 interfaces,
                 failover,
                 esim_profiles,
                 system_usage,
             ) = await asyncio.gather(
-                self._async_optional_data("gps/position/status"),
                 self._async_optional_data("interfaces/status"),
                 self._async_optional_data("failover/status"),
                 self._async_optional_data("esim/config"),
                 self._async_optional_data("system/device/usage/status"),
             )
+            if not use_nmea:
+                gps_from_api = await self._async_optional_data("gps/position/status")
         except TeltonikaAuthenticationError as err:
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
         except TeltonikaConnectionError as err:
             raise UpdateFailed(f"Error communicating with device: {err}") from err
+
+        if self.nmea_active or use_nmea:
+            gps = self.data.gps
+        elif isinstance(gps_from_api, dict):
+            gps = {**gps_from_api, "source": "api"}
+        else:
+            gps = None
 
         return TeltonikaData(
             modems={
@@ -148,7 +207,7 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
                 for modem in (modems_response.data or [])
                 if isinstance(modem, ModemStatusFull)
             },
-            gps=gps if isinstance(gps, dict) else None,
+            gps=gps,
             interfaces=interfaces if isinstance(interfaces, list) else [],
             failover=failover if isinstance(failover, dict) else {},
             esim_profiles=esim_profiles if isinstance(esim_profiles, list) else [],
