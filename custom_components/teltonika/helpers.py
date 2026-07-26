@@ -525,6 +525,29 @@ def data_usage_totals(entries: Any) -> dict[str, int]:
     }
 
 
+def system_cpu_usage(system_usage: dict[str, Any]) -> float | None:
+    """Return RutOS CPU utilization as a percentage."""
+    value = as_float(system_usage.get("loadavg"))
+    if value is None:
+        return None
+    return min(100.0, max(0.0, value * 100))
+
+
+def system_memory_usage(system_usage: dict[str, Any]) -> float | None:
+    """Return RutOS RAM utilization as a percentage."""
+    memory = system_usage.get("memory")
+    if not isinstance(memory, dict):
+        return None
+    percentage = as_float(memory.get("ram_percentage"))
+    if percentage is not None:
+        return min(100.0, max(0.0, percentage))
+    used = as_float(memory.get("ram_used"))
+    total = as_float(memory.get("ram_total"))
+    if used is None or total is None or total <= 0:
+        return None
+    return min(100.0, max(0.0, used / total * 100))
+
+
 def supports_sim_switch(modem: Any) -> bool:
     """Return whether a modem exposes physical SIM switching."""
     return bool(
@@ -695,3 +718,122 @@ def active_wan_interfaces(
         ):
             candidates.append(interface)
     return sorted(candidates, key=lambda item: item.get("metric", 9999))
+
+
+def interface_identifier(interface: dict[str, Any]) -> str | None:
+    """Return a stable identifier for a RutOS network interface."""
+    for key in ("id", "interface", "ifname", "name", "device"):
+        if value := interface.get(key):
+            return str(value)
+    return None
+
+
+def _interface_counter(interface: dict[str, Any], direction: str) -> int | None:
+    """Return an RX or TX byte counter across RutOS response variants."""
+    keys = (f"{direction}_bytes", f"{direction}bytes")
+    sources = [
+        interface,
+        interface.get("statistics"),
+        interface.get("stats"),
+        interface.get("data"),
+    ]
+    for source in sources:
+        if not isinstance(source, dict):
+            continue
+        for key in keys:
+            value = as_int(source.get(key))
+            if value is not None and value >= 0:
+                return value
+    return None
+
+
+def interface_counter_snapshot(
+    interfaces: list[dict[str, Any]],
+) -> dict[str, tuple[int | None, int | None]]:
+    """Return RX/TX counter snapshots keyed by interface identity."""
+    return {
+        identifier: (
+            _interface_counter(interface, "rx"),
+            _interface_counter(interface, "tx"),
+        )
+        for interface in interfaces
+        if (identifier := interface_identifier(interface)) is not None
+    }
+
+
+def _is_lan_interface(interface: dict[str, Any]) -> bool:
+    """Return whether a RutOS interface belongs to the LAN side."""
+    identifier = (interface_identifier(interface) or "").lower()
+    area = str(
+        interface.get("area_type")
+        or interface.get("zone")
+        or interface.get("role")
+        or ""
+    ).lower()
+    network_type = str(interface.get("network_type") or "").lower()
+    return (
+        area == "lan"
+        or network_type == "lan"
+        or identifier == "lan"
+        or identifier.startswith(("lan", "br-lan"))
+    )
+
+
+def interface_transfer_rates(
+    interfaces: list[dict[str, Any]],
+    failover: dict[str, dict[str, Any]],
+    previous: dict[str, tuple[int | None, int | None]],
+    elapsed_seconds: float | None,
+) -> tuple[
+    dict[str, float | None],
+    dict[str, tuple[int | None, int | None]],
+    dict[str, list[str]],
+]:
+    """Calculate current WAN/LAN transfer rates from interface byte counters."""
+    current = interface_counter_snapshot(interfaces)
+    wan_ids = {
+        identifier
+        for interface in active_wan_interfaces(interfaces, failover)
+        if (identifier := interface_identifier(interface)) is not None
+    }
+    lan_ids = {
+        identifier
+        for interface in interfaces
+        if _is_lan_interface(interface)
+        and (identifier := interface_identifier(interface)) is not None
+    }
+    groups = {
+        "internet": sorted(wan_ids),
+        "lan": sorted(lan_ids),
+    }
+
+    def _rate(interface_ids: set[str], counter_index: int) -> float | None:
+        if not elapsed_seconds or elapsed_seconds <= 0:
+            return None
+        delta_bytes = 0
+        valid_counters = 0
+        for identifier in interface_ids:
+            current_counter = current.get(identifier, (None, None))[counter_index]
+            previous_counter = previous.get(identifier, (None, None))[counter_index]
+            if (
+                current_counter is None
+                or previous_counter is None
+                or current_counter < previous_counter
+            ):
+                continue
+            delta_bytes += current_counter - previous_counter
+            valid_counters += 1
+        if not valid_counters:
+            return None
+        return round(delta_bytes * 8 / elapsed_seconds / 1_000_000, 6)
+
+    return (
+        {
+            "internet_rx": _rate(wan_ids, 0),
+            "internet_tx": _rate(wan_ids, 1),
+            "lan_rx": _rate(lan_ids, 0),
+            "lan_tx": _rate(lan_ids, 1),
+        },
+        current,
+        groups,
+    )

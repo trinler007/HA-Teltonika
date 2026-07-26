@@ -39,6 +39,7 @@ from .helpers import (
     distance_km,
     esim_profiles_for_modem,
     esim_sim_card_for_modem,
+    interface_transfer_rates,
     is_enabled,
     is_esim_sim_card,
     modem_sim_switch_complete,
@@ -74,6 +75,8 @@ class TeltonikaData:
     esim_profiles: list[dict[str, Any]] = field(default_factory=list)
     sim_cards: list[dict[str, Any]] = field(default_factory=list)
     system_usage: dict[str, Any] = field(default_factory=dict)
+    transfer_rates: dict[str, float | None] = field(default_factory=dict)
+    rate_interfaces: dict[str, list[str]] = field(default_factory=dict)
     traffic_usage: dict[str, dict[str, int]] = field(default_factory=dict)
     location_name: str | None = None
     location_details: dict[str, Any] = field(default_factory=dict)
@@ -119,6 +122,8 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         self._location_details: dict[str, Any] = {}
         self._geocoding_last_attempt: float | None = None
         self._geocoding_coordinates: tuple[float, float] | None = None
+        self._interface_counters: dict[str, tuple[int | None, int | None]] = {}
+        self._interface_counter_time: float | None = None
 
     @property
     def nmea_enabled(self) -> bool:
@@ -483,6 +488,20 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         else:
             gps = None
         await self._async_update_location_name(gps)
+        interface_values = interfaces if isinstance(interfaces, list) else []
+        rate_time = monotonic()
+        transfer_rates, interface_counters, rate_interfaces = interface_transfer_rates(
+            interface_values,
+            failover if isinstance(failover, dict) else {},
+            self._interface_counters,
+            (
+                rate_time - self._interface_counter_time
+                if self._interface_counter_time is not None
+                else None
+            ),
+        )
+        self._interface_counters = interface_counters
+        self._interface_counter_time = rate_time
 
         return TeltonikaData(
             modems={
@@ -491,11 +510,13 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
                 if isinstance(modem, ModemStatusFull)
             },
             gps=gps,
-            interfaces=interfaces if isinstance(interfaces, list) else [],
+            interfaces=interface_values,
             failover=failover if isinstance(failover, dict) else {},
             esim_profiles=esim_profiles if isinstance(esim_profiles, list) else [],
             sim_cards=sim_cards if isinstance(sim_cards, list) else [],
             system_usage=system_usage if isinstance(system_usage, dict) else {},
+            transfer_rates=transfer_rates,
+            rate_interfaces=rate_interfaces,
             traffic_usage=traffic_usage,
             location_name=self._location_name,
             location_details=self._location_details,
