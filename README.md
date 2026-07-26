@@ -13,7 +13,8 @@ und ergänzt insbesondere Funktionen für den Teltonika RUTX50 mit RutOS 7.24.x.
 - alle Sensoren der offiziellen Core-Integration
 - GPS-Position als `device_tracker` für die Home-Assistant-Karte
 - GPS-Sensoren für Breiten- und Längengrad, Höhe, Satelliten, HDOP,
-  Satellitenfix, Geschwindigkeit und Kurs
+  Satellitenfix, Geschwindigkeit, Kurs und Kursrichtung auf einer
+  16-teiligen Windrose
 - optionaler TCP-NMEA-Empfänger für GPS-Livewerte ohne engmaschiges
   API-Polling
 - Diagnose-Binärsensor für TCP-Verbindung und zuletzt empfangene NMEA-Daten
@@ -53,6 +54,13 @@ Der **Maidenhead-Locator** wird als sechsstelliger Locator aus der aktuellen
 GPS-Position berechnet. Solange der Router keinen Satellitenfix meldet, bleiben
 beide berechneten Sensoren unbekannt, damit die vom Router gelieferten
 Nullkoordinaten nicht als echte Position interpretiert werden.
+
+Der Sensor **GPS-Kursrichtung** übersetzt den Kurswinkel ohne zusätzliche
+Router-Abfrage in eine 16-teilige Windrose. Bei deutscher Home-Assistant-Sprache
+werden `N`, `NNO`, `NO`, `ONO`, `O`, `OSO`, `SO`, `SSO`, `S`, `SSW`, `SW`,
+`WSW`, `W`, `WNW`, `NW` und `NNW` verwendet. Bei englischer Sprache werden
+die entsprechenden Kürzel mit `E` ausgegeben. Ohne gültigen Satellitenfix
+bleibt der Sensor unbekannt.
 
 ## GPS-Livewerte über NMEA
 

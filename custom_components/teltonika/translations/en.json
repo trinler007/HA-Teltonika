@@ -129,6 +129,9 @@
       "gps_course": {
         "name": "GPS course"
       },
+      "gps_course_direction": {
+        "name": "GPS course direction"
+      },
       "gps_fix_status": {
         "name": "GPS satellite fix"
       },
