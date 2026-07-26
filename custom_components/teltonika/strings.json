@@ -172,6 +172,9 @@
       "sinr": {
         "name": "{modem_name} SINR"
       },
+      "signal_quality_bars": {
+        "name": "{modem_name} Signal quality bars"
+      },
       "traffic_current_month_rx": {
         "name": "Mobile data current month RX"
       },

@@ -261,6 +261,7 @@ async def async_setup_entry(
             for entity in (
                 TeltonikaEstimatedCapacitySensor(coordinator, modem_id),
                 TeltonikaConnectionDescriptionSensor(coordinator, modem_id),
+                TeltonikaSignalQualityBarsSensor(coordinator, modem_id),
             )
         )
         if not globals_added:
@@ -400,8 +401,13 @@ class TeltonikaModemAssessmentSensor(TeltonikaBaseSensor):
         return {
             "quality": assessment.quality,
             "quality_score": assessment.quality_score,
+            "signal_bars": assessment.signal_bars,
             "technology": assessment.technology,
             "limiting_factor": assessment.limiting_factor,
+            "measurements": {
+                name: {"value": value, "score": score}
+                for name, value, score in assessment.metrics
+            },
             "carrier_count": assessment.carrier_count,
             "bands": list(assessment.bands),
             "total_bandwidth_mhz": assessment.total_bandwidth_mhz,
@@ -459,6 +465,31 @@ class TeltonikaConnectionDescriptionSensor(TeltonikaModemAssessmentSensor):
         return describe_mobile_connection(
             self.assessment, self.coordinator.hass.config.language
         )
+
+
+class TeltonikaSignalQualityBarsSensor(TeltonikaModemAssessmentSensor):
+    """Cellular signal quality represented as zero to three bars."""
+
+    _attr_translation_key = "signal_quality_bars"
+
+    def __init__(
+        self, coordinator: TeltonikaDataUpdateCoordinator, modem_id: str
+    ) -> None:
+        """Initialize the signal-bars sensor."""
+        super().__init__(coordinator, modem_id, "signal_quality_bars")
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        """Return cellular signal quality from zero to three bars."""
+        return self.assessment.signal_bars
+
+    @property
+    @override
+    def icon(self) -> str:
+        """Return an icon matching the current number of bars."""
+        bars = self.assessment.signal_bars
+        return "mdi:signal-off" if bars == 0 else f"mdi:signal-cellular-{bars}"
 
 
 class TeltonikaGpsSensor(TeltonikaBaseSensor):

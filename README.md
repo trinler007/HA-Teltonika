@@ -24,6 +24,7 @@ und ergänzt insbesondere Funktionen für den Teltonika RUTX50 mit RutOS 7.24.x.
 - Primärband sowie alle aktiven Carrier-Aggregation-Bänder mit Signaldetails
 - geschätzte Download-Spitzenkapazität aus Funkstandard, Kanalbandbreite und
   Signalqualität sowie eine für Sprachassistenten geeignete Beschreibung
+- zusammengefasste Mobilfunk-Signalqualität mit 0 bis 3 Balken
 - IMEI, UICC/ICCID und Mobilfunk-Registrierungsstatus
 - aktive physische SIM als Sensor und auswählbare `select`-Entität
 - je ein Aktionsbutton für SIM 1 und SIM 2
@@ -104,8 +105,16 @@ limitierenden Funkwert, die verwendeten Bänder, die gesamte Kanalbandbreite,
 eine Vertrauensstufe und die rein technische Funkobergrenze.
 
 Der Sensor **Beschreibung der Verbindungsqualität** fasst dieselben Daten als
-kurzen deutschen beziehungsweise englischen Text zusammen. Er eignet sich
-damit beispielsweise als Antwort eines Sprachassistenten.
+kurzen deutschen beziehungsweise englischen Text zusammen. RSRP, RSRQ und SINR
+werden dabei jeweils mit Messwert und Einzelbewertung genannt, statt nur den
+schwächsten Faktor allgemein zu beschreiben. Der Sensor eignet sich damit
+beispielsweise als Antwort eines Sprachassistenten.
+
+Der Sensor **Signalqualität Balken** bildet die Gesamtbewertung wie eine
+Mobilfunkanzeige auf Werte von 0 bis 3 ab. Entsprechend der Teltonika-Einteilung
+bedeuten 1 Balken 0 bis 41 Prozent, 2 Balken 42 bis 74 Prozent und 3 Balken
+75 bis 100 Prozent. 0 Balken bedeutet, dass keine Verbindung besteht oder die
+vorhandenen Messwerte keine zuverlässige Bewertung erlauben.
 
 Beide Werte sind Schätzungen der Funkstrecke und keine Geschwindigkeitsmessung.
 Aus dem Routerstatus sind insbesondere Zellenauslastung, Drosselung durch den
