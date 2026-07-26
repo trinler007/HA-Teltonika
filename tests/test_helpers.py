@@ -33,6 +33,14 @@ class ConversionTests(unittest.TestCase):
 class MobileConnectionAssessmentTests(unittest.TestCase):
     """Test radio quality and capacity estimation."""
 
+    def test_signal_bar_boundaries(self) -> None:
+        self.assertEqual(HELPERS._signal_bars(False, 100), 0)
+        self.assertEqual(HELPERS._signal_bars(True, None), 0)
+        self.assertEqual(HELPERS._signal_bars(True, 41), 1)
+        self.assertEqual(HELPERS._signal_bars(True, 42), 2)
+        self.assertEqual(HELPERS._signal_bars(True, 74), 2)
+        self.assertEqual(HELPERS._signal_bars(True, 75), 3)
+
     def test_5g_nsa_carrier_aggregation(self) -> None:
         modem = SimpleNamespace(
             conntype="5G (NSA)",
@@ -57,6 +65,7 @@ class MobileConnectionAssessmentTests(unittest.TestCase):
         self.assertTrue(result.connected)
         self.assertEqual(result.technology, "5G NSA")
         self.assertEqual(result.quality, "very_good")
+        self.assertEqual(result.signal_bars, 3)
         self.assertEqual(result.carrier_count, 4)
         self.assertEqual(result.total_bandwidth_mhz, 130)
         self.assertEqual(result.radio_ceiling_mbps, 2440)
@@ -65,7 +74,9 @@ class MobileConnectionAssessmentTests(unittest.TestCase):
 
         description = HELPERS.describe_mobile_connection(result, "de-DE")
         self.assertIn("5G NSA", description)
-        self.assertIn("4 Funkträger", description)
+        self.assertIn("4 Träger", description)
+        self.assertIn("RSRP -86 dBm ausgezeichnet", description)
+        self.assertIn("SINR 13 dB gut", description)
         self.assertIn("Megabit pro Sekunde", description)
         self.assertLessEqual(len(description), 255)
         self.assertLessEqual(len(HELPERS.describe_mobile_connection(result, "en")), 255)
@@ -84,6 +95,7 @@ class MobileConnectionAssessmentTests(unittest.TestCase):
 
         self.assertFalse(result.connected)
         self.assertEqual(result.quality, "disconnected")
+        self.assertEqual(result.signal_bars, 0)
         self.assertIsNone(result.estimated_high_mbps)
         self.assertEqual(
             HELPERS.describe_mobile_connection(result, "en"),
@@ -109,6 +121,7 @@ class MobileConnectionAssessmentTests(unittest.TestCase):
         self.assertEqual(result.technology, "4G LTE")
         self.assertEqual(result.total_bandwidth_mhz, 20)
         self.assertEqual(result.radio_ceiling_mbps, 400)
+        self.assertEqual(result.signal_bars, 1)
         self.assertEqual(result.carrier_count, 1)
         self.assertEqual(result.bands, ("LTE B20",))
 

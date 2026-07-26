@@ -18,7 +18,9 @@ class MobileConnectionAssessment:
     technology: str
     quality: str
     quality_score: int | None
+    signal_bars: int
     limiting_factor: str | None
+    metrics: tuple[tuple[str, float, int], ...]
     carrier_count: int
     bands: tuple[str, ...]
     total_bandwidth_mhz: float | None
@@ -46,20 +48,54 @@ def _interpolated_score(
     return None
 
 
-def _radio_metrics(modem: Any) -> dict[str, float]:
-    """Return normalized scores for available cellular radio metrics."""
+def _radio_metrics(
+    modem: Any,
+) -> tuple[dict[str, float], dict[str, float]]:
+    """Return raw cellular measurements and their normalized scores."""
     definitions = {
         "rsrp": ((-120, 0), (-110, 25), (-100, 50), (-90, 75), (-80, 100)),
         "rsrq": ((-20, 0), (-15, 40), (-10, 75), (-7, 100)),
         "sinr": ((-5, 0), (0, 25), (10, 60), (20, 85), (30, 100)),
         "rssi": ((-110, 0), (-95, 30), (-85, 55), (-75, 80), (-65, 100)),
     }
-    return {
+    values = {
+        name: value
+        for name in definitions
+        if (value := as_float(getattr(modem, name, None))) is not None
+    }
+    scores = {
         name: score
         for name, points in definitions.items()
-        if (score := _interpolated_score(getattr(modem, name, None), points))
-        is not None
+        if name in values
+        and (score := _interpolated_score(values[name], points)) is not None
     }
+    return values, scores
+
+
+def _quality_from_score(score: float | None) -> str:
+    """Return a stable quality key for a normalized score."""
+    if score is None:
+        return "unknown"
+    if score >= 85:
+        return "excellent"
+    if score >= 70:
+        return "very_good"
+    if score >= 55:
+        return "good"
+    if score >= 40:
+        return "fair"
+    return "poor"
+
+
+def _signal_bars(connected: bool, quality_score: int | None) -> int:
+    """Convert Teltonika's zero-to-100 signal quality to zero-to-three bars."""
+    if not connected or quality_score is None:
+        return 0
+    if quality_score < 42:
+        return 1
+    if quality_score < 75:
+        return 2
+    return 3
 
 
 def _connection_technology(modem: Any) -> str:
@@ -121,7 +157,7 @@ def assess_mobile_connection(modem: Any) -> MobileConnectionAssessment:
         )
     )
 
-    metrics = _radio_metrics(modem)
+    metric_values, metrics = _radio_metrics(modem)
     weighted_metrics = [
         (metrics[name], weight)
         for name, weight in (("rsrp", 0.35), ("rsrq", 0.25), ("sinr", 0.40))
@@ -139,20 +175,13 @@ def assess_mobile_connection(modem: Any) -> MobileConnectionAssessment:
     )
     if not connected:
         quality = "disconnected"
-    elif quality_score is None:
-        quality = "unknown"
-    elif quality_score >= 85:
-        quality = "excellent"
-    elif quality_score >= 70:
-        quality = "very_good"
-    elif quality_score >= 55:
-        quality = "good"
-    elif quality_score >= 40:
-        quality = "fair"
     else:
-        quality = "poor"
+        quality = _quality_from_score(quality_score)
 
     limiting_factor = min(metrics, key=metrics.get) if metrics else None
+    metric_assessments = tuple(
+        (name, metric_values[name], round(score)) for name, score in metrics.items()
+    )
     carriers = _carrier_values(modem)
     bands = tuple(
         dict.fromkeys(
@@ -218,7 +247,9 @@ def assess_mobile_connection(modem: Any) -> MobileConnectionAssessment:
         technology=technology,
         quality=quality,
         quality_score=quality_score,
+        signal_bars=_signal_bars(connected, quality_score),
         limiting_factor=limiting_factor,
+        metrics=metric_assessments,
         carrier_count=len(carriers) or (1 if bands else 0),
         bands=bands,
         total_bandwidth_mhz=total_bandwidth,
@@ -259,20 +290,6 @@ def describe_mobile_connection(
             "unknown": "not reliably assessable",
         },
     }
-    factor_labels = {
-        "de": {
-            "rsrp": "die Signalstärke",
-            "rsrq": "die Signalqualität",
-            "sinr": "Störungen und Rauschen",
-            "rssi": "die Signalstärke",
-        },
-        "en": {
-            "rsrp": "signal strength",
-            "rsrq": "signal quality",
-            "sinr": "interference and noise",
-            "rssi": "signal strength",
-        },
-    }
     locale = "de" if german else "en"
     quality = quality_labels[locale][assessment.quality]
     shown_bands = ", ".join(assessment.bands[:4])
@@ -280,45 +297,68 @@ def describe_mobile_connection(
         shown_bands += f" +{len(assessment.bands) - 4}"
 
     if german:
-        parts = [f"Verbindung über {assessment.technology}: {quality}."]
+        parts = [
+            (
+                f"{assessment.technology}: {quality}, "
+                f"{assessment.signal_bars} von 3 Balken."
+            )
+        ]
         if assessment.carrier_count:
-            carrier_text = f"{assessment.carrier_count} Funkträger" + (
+            carrier_text = f"{assessment.carrier_count} Träger" + (
                 f" auf {shown_bands}" if shown_bands else ""
             )
             if assessment.total_bandwidth_mhz is not None:
                 carrier_text += f" mit {assessment.total_bandwidth_mhz:g} Megahertz"
-            parts.append(f"Aktiv sind {carrier_text}.")
-        if assessment.limiting_factor:
-            parts.append(
-                "Vor allem begrenzt durch "
-                f"{factor_labels[locale][assessment.limiting_factor]}."
+            parts.append(f"{carrier_text}.")
+        shown_metrics = [
+            (name, value, score)
+            for name, value, score in assessment.metrics
+            if name in {"rsrp", "rsrq", "sinr"}
+        ] or list(assessment.metrics)
+        if shown_metrics:
+            metric_text = "; ".join(
+                f"{name.upper()} {value:g} "
+                f"{'dBm' if name in {'rsrp', 'rssi'} else 'dB'} "
+                f"{quality_labels[locale][_quality_from_score(score)]}"
+                for name, value, score in shown_metrics
             )
+            parts.append(f"{metric_text}.")
         if assessment.estimated_low_mbps is not None:
             parts.append(
-                "Bei geringer Netzauslastung: "
+                "Downloadpotenzial bei geringer Last: "
                 f"{assessment.estimated_low_mbps} bis "
-                f"{assessment.estimated_high_mbps} Megabit pro Sekunde "
-                "im Download."
+                f"{assessment.estimated_high_mbps} Megabit pro Sekunde."
             )
         return " ".join(parts)
 
-    parts = [f"{assessment.technology} connection: {quality}."]
+    parts = [
+        f"{assessment.technology}: {quality}, {assessment.signal_bars} out of 3 bars."
+    ]
     if assessment.carrier_count:
         carrier_text = f"{assessment.carrier_count} carriers" + (
             f" on {shown_bands}" if shown_bands else ""
         )
         if assessment.total_bandwidth_mhz is not None:
             carrier_text += f" using {assessment.total_bandwidth_mhz:g} megahertz"
-        parts.append(f"Active: {carrier_text}.")
-    if assessment.limiting_factor:
-        parts.append(
-            f"Mainly limited by {factor_labels[locale][assessment.limiting_factor]}."
+        parts.append(f"{carrier_text}.")
+    shown_metrics = [
+        (name, value, score)
+        for name, value, score in assessment.metrics
+        if name in {"rsrp", "rsrq", "sinr"}
+    ] or list(assessment.metrics)
+    if shown_metrics:
+        metric_text = "; ".join(
+            f"{name.upper()} {value:g} "
+            f"{'dBm' if name in {'rsrp', 'rssi'} else 'dB'} "
+            f"{quality_labels[locale][_quality_from_score(score)]}"
+            for name, value, score in shown_metrics
         )
+        parts.append(f"{metric_text}.")
     if assessment.estimated_low_mbps is not None:
         parts.append(
-            "With low cell load: "
+            "Download potential with low cell load: "
             f"{assessment.estimated_low_mbps} to "
-            f"{assessment.estimated_high_mbps} megabits per second downlink."
+            f"{assessment.estimated_high_mbps} megabits per second."
         )
     return " ".join(parts)
 
