@@ -18,7 +18,7 @@ class MobileConnectionAssessment:
     technology: str
     quality: str
     quality_score: int | None
-    signal_bars: int
+    signal_bars: int | None
     limiting_factor: str | None
     metrics: tuple[tuple[str, float, int], ...]
     carrier_count: int
@@ -87,15 +87,19 @@ def _quality_from_score(score: float | None) -> str:
     return "poor"
 
 
-def _signal_bars(connected: bool, quality_score: int | None) -> int:
-    """Convert Teltonika's zero-to-100 signal quality to zero-to-three bars."""
-    if not connected or quality_score is None:
+def _signal_bars(connected: bool, quality_score: int | None) -> int | None:
+    """Convert zero-to-100 signal quality to zero-to-four bars."""
+    if not connected:
         return 0
-    if quality_score < 42:
+    if quality_score is None:
+        return None
+    if quality_score < 25:
         return 1
-    if quality_score < 75:
+    if quality_score < 50:
         return 2
-    return 3
+    if quality_score < 75:
+        return 3
+    return 4
 
 
 def _connection_technology(modem: Any) -> str:
@@ -297,12 +301,12 @@ def describe_mobile_connection(
         shown_bands += f" +{len(assessment.bands) - 4}"
 
     if german:
-        parts = [
-            (
-                f"{assessment.technology}: {quality}, "
-                f"{assessment.signal_bars} von 3 Balken."
-            )
-        ]
+        bars_text = (
+            f"{assessment.signal_bars} von 4 Balken"
+            if assessment.signal_bars is not None
+            else "Balken nicht bewertbar"
+        )
+        parts = [(f"{assessment.technology}: {quality}, {bars_text}.")]
         if assessment.carrier_count:
             carrier_text = f"{assessment.carrier_count} Träger" + (
                 f" auf {shown_bands}" if shown_bands else ""
@@ -331,9 +335,12 @@ def describe_mobile_connection(
             )
         return " ".join(parts)
 
-    parts = [
-        f"{assessment.technology}: {quality}, {assessment.signal_bars} out of 3 bars."
-    ]
+    bars_text = (
+        f"{assessment.signal_bars} out of 4 bars"
+        if assessment.signal_bars is not None
+        else "bars unavailable"
+    )
+    parts = [f"{assessment.technology}: {quality}, {bars_text}."]
     if assessment.carrier_count:
         carrier_text = f"{assessment.carrier_count} carriers" + (
             f" on {shown_bands}" if shown_bands else ""

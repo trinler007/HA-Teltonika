@@ -35,11 +35,13 @@ class MobileConnectionAssessmentTests(unittest.TestCase):
 
     def test_signal_bar_boundaries(self) -> None:
         self.assertEqual(HELPERS._signal_bars(False, 100), 0)
-        self.assertEqual(HELPERS._signal_bars(True, None), 0)
-        self.assertEqual(HELPERS._signal_bars(True, 41), 1)
-        self.assertEqual(HELPERS._signal_bars(True, 42), 2)
-        self.assertEqual(HELPERS._signal_bars(True, 74), 2)
-        self.assertEqual(HELPERS._signal_bars(True, 75), 3)
+        self.assertIsNone(HELPERS._signal_bars(True, None))
+        self.assertEqual(HELPERS._signal_bars(True, 24), 1)
+        self.assertEqual(HELPERS._signal_bars(True, 25), 2)
+        self.assertEqual(HELPERS._signal_bars(True, 49), 2)
+        self.assertEqual(HELPERS._signal_bars(True, 50), 3)
+        self.assertEqual(HELPERS._signal_bars(True, 74), 3)
+        self.assertEqual(HELPERS._signal_bars(True, 75), 4)
 
     def test_5g_nsa_carrier_aggregation(self) -> None:
         modem = SimpleNamespace(
@@ -65,7 +67,7 @@ class MobileConnectionAssessmentTests(unittest.TestCase):
         self.assertTrue(result.connected)
         self.assertEqual(result.technology, "5G NSA")
         self.assertEqual(result.quality, "very_good")
-        self.assertEqual(result.signal_bars, 3)
+        self.assertEqual(result.signal_bars, 4)
         self.assertEqual(result.carrier_count, 4)
         self.assertEqual(result.total_bandwidth_mhz, 130)
         self.assertEqual(result.radio_ceiling_mbps, 2440)
@@ -121,7 +123,7 @@ class MobileConnectionAssessmentTests(unittest.TestCase):
         self.assertEqual(result.technology, "4G LTE")
         self.assertEqual(result.total_bandwidth_mhz, 20)
         self.assertEqual(result.radio_ceiling_mbps, 400)
-        self.assertEqual(result.signal_bars, 1)
+        self.assertEqual(result.signal_bars, 2)
         self.assertEqual(result.carrier_count, 1)
         self.assertEqual(result.bands, ("LTE B20",))
 
