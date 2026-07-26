@@ -468,7 +468,7 @@ class TeltonikaConnectionDescriptionSensor(TeltonikaModemAssessmentSensor):
 
 
 class TeltonikaSignalQualityBarsSensor(TeltonikaModemAssessmentSensor):
-    """Cellular signal quality represented as zero to three bars."""
+    """Cellular signal quality represented as zero to four bars."""
 
     _attr_translation_key = "signal_quality_bars"
 
@@ -481,7 +481,7 @@ class TeltonikaSignalQualityBarsSensor(TeltonikaModemAssessmentSensor):
     @property
     @override
     def native_value(self) -> StateType:
-        """Return cellular signal quality from zero to three bars."""
+        """Return cellular signal quality from zero to four bars."""
         return self.assessment.signal_bars
 
     @property
@@ -489,7 +489,11 @@ class TeltonikaSignalQualityBarsSensor(TeltonikaModemAssessmentSensor):
     def icon(self) -> str:
         """Return an icon matching the current number of bars."""
         bars = self.assessment.signal_bars
-        return "mdi:signal-off" if bars == 0 else f"mdi:signal-cellular-{bars}"
+        if bars is None:
+            return "mdi:network-strength-outline"
+        return (
+            "mdi:network-strength-off" if bars == 0 else f"mdi:network-strength-{bars}"
+        )
 
 
 class TeltonikaGpsSensor(TeltonikaBaseSensor):
