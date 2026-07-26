@@ -38,6 +38,7 @@ from .helpers import (
     as_float,
     as_int,
     assess_mobile_connection,
+    compass_direction,
     describe_mobile_connection,
     distance_km,
     interface_ip_address,
@@ -269,6 +270,7 @@ async def async_setup_entry(
                 TeltonikaGpsSensor(coordinator, description)
                 for description in GPS_SENSORS
             )
+            entities.append(TeltonikaGpsCourseDirectionSensor(coordinator))
             entities.extend(
                 (
                     TeltonikaActiveWanSensor(coordinator),
@@ -529,6 +531,44 @@ class TeltonikaGpsSensor(TeltonikaBaseSensor):
         """Return the active GPS data source and stream timestamp."""
         gps = self.coordinator.data.gps or {}
         return {
+            "source": gps.get("source", "api"),
+            "received_at": gps.get("received_at"),
+        }
+
+
+class TeltonikaGpsCourseDirectionSensor(TeltonikaBaseSensor):
+    """GPS course translated to a localized compass direction."""
+
+    _attr_translation_key = "gps_course_direction"
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        """Initialize the GPS course-direction sensor."""
+        super().__init__(coordinator, "gps_course_direction")
+
+    @property
+    @override
+    def available(self) -> bool:
+        """Return whether GPS data is available."""
+        return super().available and self.coordinator.data.gps is not None
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        """Return the current course as a 16-point compass direction."""
+        gps = self.coordinator.data.gps or {}
+        if as_int(gps.get("fix_status")) == 0:
+            return None
+        return compass_direction(
+            gps.get("angle"), self.coordinator.hass.config.language
+        )
+
+    @property
+    @override
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the underlying course and GPS source."""
+        gps = self.coordinator.data.gps or {}
+        return {
+            "course_degrees": as_float(gps.get("angle")),
             "source": gps.get("source", "api"),
             "received_at": gps.get("received_at"),
         }

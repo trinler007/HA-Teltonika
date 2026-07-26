@@ -315,6 +315,26 @@ class EsimProfileTests(unittest.TestCase):
 class LocationTests(unittest.TestCase):
     """Test calculated location helpers."""
 
+    def test_compass_direction_uses_16_point_wind_rose(self) -> None:
+        self.assertEqual(HELPERS.compass_direction(0, "de-DE"), "N")
+        self.assertEqual(HELPERS.compass_direction(22.5, "de-DE"), "NNO")
+        self.assertEqual(HELPERS.compass_direction(45, "de-DE"), "NO")
+        self.assertEqual(HELPERS.compass_direction(67.5, "de-DE"), "ONO")
+        self.assertEqual(HELPERS.compass_direction(90, "de-DE"), "O")
+        self.assertEqual(HELPERS.compass_direction(202.5, "de-DE"), "SSW")
+        self.assertEqual(HELPERS.compass_direction(225, "de-DE"), "SW")
+        self.assertEqual(HELPERS.compass_direction(337.5, "de-DE"), "NNW")
+        self.assertEqual(HELPERS.compass_direction(360, "de-DE"), "N")
+
+    def test_compass_direction_localizes_east_and_handles_invalid_values(
+        self,
+    ) -> None:
+        self.assertEqual(HELPERS.compass_direction(22.5, "en"), "NNE")
+        self.assertEqual(HELPERS.compass_direction(90, "en"), "E")
+        self.assertEqual(HELPERS.compass_direction(-90, "en"), "W")
+        self.assertIsNone(HELPERS.compass_direction("unknown", "de"))
+        self.assertIsNone(HELPERS.compass_direction(float("nan"), "de"))
+
     def test_distance_uses_great_circle(self) -> None:
         self.assertAlmostEqual(
             HELPERS.distance_km(0, 0, 0, 1),

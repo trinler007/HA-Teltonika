@@ -420,6 +420,54 @@ def distance_km(
     return 2 * EARTH_RADIUS_KM * math.asin(math.sqrt(min(1.0, value)))
 
 
+def compass_direction(course: Any, language: str) -> str | None:
+    """Convert a course in degrees to a localized 16-point compass direction."""
+    degrees = as_float(course)
+    if degrees is None or not math.isfinite(degrees):
+        return None
+    directions = (
+        (
+            "N",
+            "NNO",
+            "NO",
+            "ONO",
+            "O",
+            "OSO",
+            "SO",
+            "SSO",
+            "S",
+            "SSW",
+            "SW",
+            "WSW",
+            "W",
+            "WNW",
+            "NW",
+            "NNW",
+        )
+        if language.lower().startswith("de")
+        else (
+            "N",
+            "NNE",
+            "NE",
+            "ENE",
+            "E",
+            "ESE",
+            "SE",
+            "SSE",
+            "S",
+            "SSW",
+            "SW",
+            "WSW",
+            "W",
+            "WNW",
+            "NW",
+            "NNW",
+        )
+    )
+    index = int(((degrees % 360) + 11.25) // 22.5) % len(directions)
+    return directions[index]
+
+
 def maidenhead_locator(latitude: Any, longitude: Any) -> str | None:
     """Return a six-character Maidenhead grid locator."""
     lat = as_float(latitude)
