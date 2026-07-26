@@ -34,6 +34,8 @@ und ergänzt insbesondere Funktionen für den Teltonika RUTX50 mit RutOS 7.24.x.
 - aktive Internetverbindung aus Multi-WAN/Failover einschließlich Typ, IP,
   Modem und SIM als Attribute
 - aktuelle WAN-IP-Adresse, Router-Firmware und Betriebszeit
+- CPU- und RAM-Auslastung als Diagnosesensoren
+- aktuelle Internet- und LAN-Übertragungsraten für RX und TX
 - Mobilfunk-Datenverbrauch für heute, gestern, aktuellen Monat und Vormonat,
   jeweils als RX, TX und Gesamt
 - DHCP-Erkennung, Reauthentifizierung und URL-Behandlung der Core-Integration
@@ -240,6 +242,33 @@ Laufende Zeiträume werden höchstens alle fünf Minuten abgefragt. Abgeschlosse
 Zeiträume werden zwischengespeichert und nur nach einem Tages- oder
 Monatswechsel neu geladen. Dadurch entstehen im normalen Betrieb lediglich
 zwei zusätzliche API-Abfragen je fünf Minuten.
+
+## Routerauslastung und aktuelle Übertragungsraten
+
+Die Diagnosesensoren **CPU-Auslastung** und **Speicherauslastung** verwenden die
+von RutOS über `/api/system/device/usage/status` gelieferten Werte. Die
+CPU-Attribute enthalten zusätzlich die Lastmittelwerte für eine, fünf und
+15 Minuten. Beim RAM werden belegter, freier, gepufferter und gesamter Speicher
+als Attribute in MB ausgegeben.
+
+Die Sensoren **Internet-Downloadrate**, **Internet-Uploadrate**,
+**LAN-Empfangsrate** und **LAN-Senderate** berechnen Mbit/s aus der Differenz
+der Interface-Bytezähler zwischen zwei regulären API-Aktualisierungen. Sie
+verursachen keine zusätzlichen Router-Abfragen und folgen dem konfigurierten
+Pollingintervall. Bis zum zweiten Messpunkt bleiben sie unbekannt. Ein
+Zähler-Reset, etwa nach einem Interface-Neustart oder SIM-Wechsel, wird erkannt
+und nicht als falsche Datenrate ausgegeben. Der angezeigte Wert ist der
+Mittelwert über das letzte Pollingintervall und keine sekundengenaue
+Momentaufnahme.
+
+Internet RX entspricht dem Download vom aktiven WAN zum Router, Internet TX
+dem Upload. LAN RX bezeichnet Daten, die der Router aus dem LAN empfängt; LAN
+TX Daten, die er in das LAN sendet. Bei mehreren gleichzeitig aktiven
+WAN- beziehungsweise LAN-Interfaces werden gültige Zähler gemeinsam
+berücksichtigt. Die jeweils beteiligten Interfaces stehen als Sensorattribut
+zur Verfügung. Rein intern durch einen Hardware-Switch weitergeleiteter Verkehr
+zwischen LAN-Ports muss den Router nicht passieren und kann deshalb in den
+LAN-Interfacezählern fehlen.
 
 ## Weltweiter Ortsname
 

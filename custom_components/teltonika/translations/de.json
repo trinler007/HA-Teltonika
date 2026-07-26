@@ -108,6 +108,9 @@
       "connection_type": {
         "name": "{modem_name} Verbindungstyp"
       },
+      "cpu_usage": {
+        "name": "CPU-Auslastung"
+      },
       "connection_quality_description": {
         "name": "{modem_name} Beschreibung der Verbindungsqualität"
       },
@@ -153,8 +156,23 @@
       "imei": {
         "name": "{modem_name} IMEI"
       },
+      "internet_download_rate": {
+        "name": "Internet-Downloadrate"
+      },
+      "internet_upload_rate": {
+        "name": "Internet-Uploadrate"
+      },
+      "lan_receive_rate": {
+        "name": "LAN-Empfangsrate"
+      },
+      "lan_send_rate": {
+        "name": "LAN-Senderate"
+      },
       "maidenhead_locator": {
         "name": "Maidenhead-Locator"
+      },
+      "memory_usage": {
+        "name": "RAM-Auslastung"
       },
       "location_name": {
         "name": "Aktueller Ort"

@@ -144,6 +144,36 @@ class DataUsageTests(unittest.TestCase):
             {"rx": 300, "tx": 125, "total": 425},
         )
 
+
+class SystemUsageTests(unittest.TestCase):
+    """Test RutOS CPU and RAM usage extraction."""
+
+    def test_cpu_and_memory_percentages(self) -> None:
+        usage = {
+            "loadavg": 0.375,
+            "memory": {
+                "ram_percentage": 62.5,
+                "ram_used": 320,
+                "ram_total": 512,
+            },
+        }
+        self.assertEqual(HELPERS.system_cpu_usage(usage), 37.5)
+        self.assertEqual(HELPERS.system_memory_usage(usage), 62.5)
+
+    def test_memory_percentage_fallback(self) -> None:
+        self.assertEqual(
+            HELPERS.system_memory_usage(
+                {"memory": {"ram_used": 384, "ram_total": 512}}
+            ),
+            75,
+        )
+        self.assertIsNone(HELPERS.system_cpu_usage({}))
+        self.assertIsNone(HELPERS.system_memory_usage({"memory": {}}))
+
+
+class SimSwitchTests(unittest.TestCase):
+    """Test physical and eSIM switching helpers."""
+
     def test_sim_switch_capability(self) -> None:
         self.assertTrue(
             HELPERS.supports_sim_switch(
@@ -374,6 +404,76 @@ class InterfaceTests(unittest.TestCase):
             ),
             "192.0.2.5",
         )
+
+    def test_wan_and_lan_transfer_rates(self) -> None:
+        previous = {
+            "mob1s1a1": (1_000, 2_000),
+            "lan": (3_000, 4_000),
+        }
+        interfaces = [
+            {
+                "id": "mob1s1a1",
+                "up": True,
+                "network_type": "mobile",
+                "rx_bytes": 1_251_000,
+                "tx_bytes": 627_000,
+            },
+            {
+                "id": "lan",
+                "up": True,
+                "area_type": "lan",
+                "rx_bytes": 253_000,
+                "tx_bytes": 2_504_000,
+            },
+        ]
+        rates, snapshot, groups = HELPERS.interface_transfer_rates(
+            interfaces,
+            {"mob1s1a1": {"status": "online", "up": True}},
+            previous,
+            10,
+        )
+
+        self.assertEqual(
+            rates,
+            {
+                "internet_rx": 1.0,
+                "internet_tx": 0.5,
+                "lan_rx": 0.2,
+                "lan_tx": 2.0,
+            },
+        )
+        self.assertEqual(snapshot["lan"], (253_000, 2_504_000))
+        self.assertEqual(groups, {"internet": ["mob1s1a1"], "lan": ["lan"]})
+
+    def test_transfer_rates_need_two_samples_and_ignore_counter_reset(self) -> None:
+        interfaces = [
+            {
+                "id": "wan",
+                "up": True,
+                "area_type": "wan",
+                "rx_bytes": 100,
+                "tx_bytes": 200,
+            }
+        ]
+        first_rates, snapshot, _ = HELPERS.interface_transfer_rates(
+            interfaces, {}, {}, None
+        )
+        self.assertTrue(all(value is None for value in first_rates.values()))
+
+        reset_rates, _, _ = HELPERS.interface_transfer_rates(
+            [
+                {
+                    **interfaces[0],
+                    "rx_bytes": 50,
+                    "tx_bytes": 300,
+                }
+            ],
+            {},
+            snapshot,
+            10,
+        )
+        self.assertIsNone(reset_rates["internet_rx"])
+        self.assertEqual(reset_rates["internet_tx"], 0.00008)
 
 
 class ActiveWanTests(unittest.TestCase):

@@ -14,6 +14,7 @@ from homeassistant.components.sensor import (
 )
 from homeassistant.const import (
     DEGREE,
+    PERCENTAGE,
     SIGNAL_STRENGTH_DECIBELS,
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
     UnitOfDataRate,
@@ -43,6 +44,8 @@ from .helpers import (
     distance_km,
     interface_ip_address,
     maidenhead_locator,
+    system_cpu_usage,
+    system_memory_usage,
 )
 
 PARALLEL_UPDATES = 0
@@ -234,6 +237,12 @@ GPS_SENSORS: tuple[TeltonikaGpsSensorDescription, ...] = (
 
 TRAFFIC_PERIODS = ("today", "yesterday", "current_month", "previous_month")
 TRAFFIC_METRICS = ("rx", "tx", "total")
+TRANSFER_RATE_SENSORS = (
+    ("internet_rx", "internet_download_rate", "internet"),
+    ("internet_tx", "internet_upload_rate", "internet"),
+    ("lan_rx", "lan_receive_rate", "lan"),
+    ("lan_tx", "lan_send_rate", "lan"),
+)
 
 
 async def async_setup_entry(
@@ -280,7 +289,15 @@ async def async_setup_entry(
                     TeltonikaFirmwareSensor(coordinator),
                     TeltonikaUptimeSensor(coordinator),
                     TeltonikaLocationNameSensor(coordinator),
+                    TeltonikaCpuUsageSensor(coordinator),
+                    TeltonikaMemoryUsageSensor(coordinator),
                 )
+            )
+            entities.extend(
+                TeltonikaTransferRateSensor(
+                    coordinator, rate_key, translation_key, interface_group
+                )
+                for rate_key, translation_key, interface_group in TRANSFER_RATE_SENSORS
             )
             entities.extend(
                 TeltonikaTrafficUsageSensor(coordinator, period, metric)
@@ -659,6 +676,121 @@ class TeltonikaWanIpSensor(TeltonikaBaseSensor):
             "interface": primary.get("interface") or primary.get("id"),
             "device": primary.get("device") or primary.get("ifname"),
             "network_type": primary.get("network_type"),
+        }
+
+
+class TeltonikaCpuUsageSensor(TeltonikaBaseSensor):
+    """Router CPU utilization sensor."""
+
+    _attr_translation_key = "cpu_usage"
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 1
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        """Initialize the CPU utilization sensor."""
+        super().__init__(coordinator, "cpu_usage")
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        """Return current CPU utilization."""
+        return system_cpu_usage(self.coordinator.data.system_usage)
+
+    @property
+    @override
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return RutOS CPU load averages."""
+        load = self.coordinator.data.system_usage.get("load")
+        if not isinstance(load, dict):
+            load = {}
+        return {
+            "load_1_minute": as_float(load.get("min1")),
+            "load_5_minutes": as_float(load.get("min5")),
+            "load_15_minutes": as_float(load.get("min15")),
+        }
+
+
+class TeltonikaMemoryUsageSensor(TeltonikaBaseSensor):
+    """Router RAM utilization sensor."""
+
+    _attr_translation_key = "memory_usage"
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 1
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        """Initialize the memory utilization sensor."""
+        super().__init__(coordinator, "memory_usage")
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        """Return current RAM utilization."""
+        return system_memory_usage(self.coordinator.data.system_usage)
+
+    @property
+    @override
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return detailed RutOS RAM values in megabytes."""
+        memory = self.coordinator.data.system_usage.get("memory")
+        if not isinstance(memory, dict):
+            memory = {}
+        return {
+            "used_mb": as_float(memory.get("ram_used")),
+            "free_mb": as_float(memory.get("ram_free")),
+            "buffered_mb": as_float(memory.get("ram_buffered")),
+            "total_mb": as_float(memory.get("ram_total")),
+        }
+
+
+class TeltonikaTransferRateSensor(TeltonikaBaseSensor):
+    """Current transfer rate calculated from interface counters."""
+
+    _attr_device_class = SensorDeviceClass.DATA_RATE
+    _attr_native_unit_of_measurement = UnitOfDataRate.MEGABITS_PER_SECOND
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 3
+
+    def __init__(
+        self,
+        coordinator: TeltonikaDataUpdateCoordinator,
+        rate_key: str,
+        translation_key: str,
+        interface_group: str,
+    ) -> None:
+        """Initialize a transfer-rate sensor."""
+        super().__init__(coordinator, translation_key)
+        self._rate_key = rate_key
+        self._interface_group = interface_group
+        self._attr_translation_key = translation_key
+
+    @property
+    @override
+    def available(self) -> bool:
+        """Return whether two valid counter samples are available."""
+        return (
+            super().available
+            and self.coordinator.data.transfer_rates.get(self._rate_key) is not None
+        )
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        """Return the current transfer rate in megabits per second."""
+        return self.coordinator.data.transfer_rates.get(self._rate_key)
+
+    @property
+    @override
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the interfaces contributing to this rate."""
+        return {
+            "interfaces": self.coordinator.data.rate_interfaces.get(
+                self._interface_group, []
+            ),
+            "calculation": "byte_counter_delta",
         }
 
 
