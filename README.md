@@ -117,11 +117,58 @@ Mobilfunkanzeige auf Werte von 0 bis 4 ab. 1 Balken entspricht 0 bis
 Mobilfunkverbindung besteht. Besteht eine Verbindung, fehlen aber verwertbare
 Signalwerte, bleibt der Sensor unbekannt.
 
-Beide Werte sind Schätzungen der Funkstrecke und keine Geschwindigkeitsmessung.
-Aus dem Routerstatus sind insbesondere Zellenauslastung, Drosselung durch den
-Provider, Kapazität der Basisstationsanbindung und Protokoll-Overhead nicht
-bekannt. Die genannte Spanne gilt deshalb nur als unter günstigen Bedingungen
-plausible Spitzenrate und kann deutlich von einem Speedtest abweichen.
+Die Kapazitätswerte sind Schätzungen der Funkstrecke und keine
+Geschwindigkeitsmessung. Aus dem Routerstatus sind insbesondere
+Zellenauslastung, Drosselung durch den Provider, Kapazität der
+Basisstationsanbindung und Protokoll-Overhead nicht bekannt. Die genannte
+Spanne gilt deshalb nur als unter günstigen Bedingungen plausible Spitzenrate
+und kann deutlich von einem Speedtest abweichen.
+
+### Signalbalken auf einem openHASP-Display
+
+Die Werte 0 bis 4 eignen sich für eine kompakte Anzeige mit den
+Material-Design-Icons `signal-off`, `signal-cellular-outline` und
+`signal-cellular-1` bis `signal-cellular-3`. In einem Node-RED-Function-Node
+können die openHASP-Unicode-Codepoints beispielsweise so zugeordnet werden:
+
+```javascript
+const mdi = {
+  0: 0xF0783, // signal-off
+  1: 0xF08BF, // signal-cellular-outline
+  2: 0xF08BC, // signal-cellular-1
+  3: 0xF08BD, // signal-cellular-2
+  4: 0xF08BE, // signal-cellular-3
+};
+
+const bars = Math.max(0, Math.min(Number(msg.payload) || 0, 4));
+msg.payload = String.fromCodePoint(mdi[bars]);
+return msg;
+```
+
+Alternativ kann die Zuordnung direkt in einem openHASP-YAML-Template erfolgen:
+
+```yaml
+objects:
+  - obj: "p0b13"
+    properties:
+      text: >
+        {% set bars =
+          states('sensor.technik_nx01_gw01_internal_modem_signalqualitat_balken')
+          | int(0)
+        %}
+        {% set icons = {
+          0: "\U000F0783",
+          1: "\U000F08BF",
+          2: "\U000F08BC",
+          3: "\U000F08BD",
+          4: "\U000F08BE"
+        } %}
+        {{ icons.get([0, [bars, 4] | min] | max, "\U000F0783") }}
+```
+
+Die Entity ID und die openHASP-Objekt-ID müssen an die eigene Installation
+angepasst werden. Die verwendete openHASP-Schriftart muss die genannten
+Material-Design-Icons enthalten.
 
 ## Installation
 
