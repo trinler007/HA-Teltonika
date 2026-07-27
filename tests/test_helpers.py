@@ -341,6 +341,23 @@ class EsimProfileTests(unittest.TestCase):
             [],
         )
 
+    def test_profile_set_marks_only_the_active_profile(self) -> None:
+        profiles = [
+            {"id": "1", "name": "Primary", "profile_set": "1"},
+            {"id": "2", "name": "Travel", "profile_set": "0"},
+        ]
+
+        self.assertTrue(HELPERS.is_esim_profile_active(profiles[0]))
+        self.assertFalse(HELPERS.is_esim_profile_active(profiles[1]))
+
+    def test_profile_active_supports_legacy_enabled_flags(self) -> None:
+        self.assertTrue(HELPERS.is_esim_profile_active({"enabled": True}))
+        self.assertTrue(HELPERS.is_esim_profile_active({"enabled": 1}))
+        self.assertFalse(HELPERS.is_esim_profile_active({"enabled": "0"}))
+        self.assertFalse(
+            HELPERS.is_esim_profile_active({"profile_set": "0", "enabled": "1"})
+        )
+
 
 class LocationTests(unittest.TestCase):
     """Test calculated location helpers."""
