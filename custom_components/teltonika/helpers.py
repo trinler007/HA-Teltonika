@@ -589,6 +589,17 @@ def is_enabled(value: Any) -> bool:
     )
 
 
+def is_esim_profile_active(profile: Any) -> bool:
+    """Return whether RutOS reports an eSIM profile as active."""
+    if not isinstance(profile, dict):
+        return False
+    # Current RutOS versions expose the state as profile_set. Keep enabled as
+    # a fallback for older API variants.
+    if "profile_set" in profile:
+        return is_enabled(profile.get("profile_set"))
+    return is_enabled(profile.get("enabled"))
+
+
 def is_esim_sim_card(sim_card: Any) -> bool:
     """Return whether a SIM-card configuration represents an eSIM."""
     if not isinstance(sim_card, dict):

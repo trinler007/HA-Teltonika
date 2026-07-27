@@ -221,6 +221,8 @@ Profile liefert. Die Auswahl setzt den eSIM-Eintrag über
 fragt die Profile anschließend erneut ab. Dafür steht auch ein eigener
 eSIM-Auswahlbutton bereit. Sobald Profile sichtbar sind, erscheinen sie als
 `eSIM: Profilname`; zusätzlich wird die separate Profilauswahl angelegt.
+Dabei werden alle installierten Profile angeboten, unabhängig davon, welches
+Profil gerade aktiv ist. Die Integration fragt die Profilliste modembezogen ab;
 Profile ohne Modem-ID werden bei genau einem Modem diesem Modem zugeordnet.
 
 ## Mobilfunk-Datenverbrauch

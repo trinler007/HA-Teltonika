@@ -444,6 +444,36 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             return None
         return response.get("data")
 
+    async def _async_esim_profiles(self, modem_ids: list[str]) -> list[dict[str, Any]]:
+        """Fetch all eSIM profiles using the modem-scoped RutOS query."""
+        scoped_results = await asyncio.gather(
+            *(
+                self._async_optional_data("esim/config", params={"modem": modem_id})
+                for modem_id in modem_ids
+            )
+        )
+        profiles: list[dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+        for modem_id, result in zip(modem_ids, scoped_results, strict=True):
+            if not isinstance(result, list):
+                continue
+            for value in result:
+                if not isinstance(value, dict):
+                    continue
+                profile = dict(value)
+                profile.setdefault("modem", modem_id)
+                identity = (str(profile.get("modem")), str(profile.get("id")))
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                profiles.append(profile)
+        if profiles:
+            return profiles
+
+        # Older API versions may not support the modem query parameter.
+        unscoped = await self._async_optional_data("esim/config")
+        return unscoped if isinstance(unscoped, list) else []
+
     @override
     async def _async_update_data(self) -> TeltonikaData:
         """Fetch data from the Teltonika device."""
@@ -457,6 +487,11 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
                 )
                 raise UpdateFailed(error_message)
 
+            modem_ids = [
+                modem.id
+                for modem in (modems_response.data or [])
+                if isinstance(modem, ModemStatusFull)
+            ]
             use_nmea = self.nmea_active
             gps_from_api = None
             (
@@ -469,7 +504,7 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             ) = await asyncio.gather(
                 self._async_optional_data("interfaces/status"),
                 self._async_optional_data("failover/status"),
-                self._async_optional_data("esim/config"),
+                self._async_esim_profiles(modem_ids),
                 self._async_optional_data("sim_cards/config"),
                 self._async_optional_data("system/device/usage/status"),
                 self._async_update_traffic_usage(),
@@ -600,8 +635,8 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         )
         for delay in (2, 3, 5):
             await asyncio.sleep(delay)
-            profiles = await self._async_optional_data("esim/config")
-            if isinstance(profiles, list) and profiles:
+            profiles = await self._async_esim_profiles([modem_id])
+            if profiles:
                 self._async_publish_live_data(
                     replace(
                         self.data,

@@ -11,7 +11,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import TeltonikaConfigEntry
 from .coordinator import TeltonikaDataUpdateCoordinator
-from .helpers import supports_sim_switch
+from .helpers import is_esim_profile_active, supports_sim_switch
 
 
 async def async_setup_entry(
@@ -92,11 +92,7 @@ class TeltonikaSimSelect(TeltonikaBaseSelect):
 
     def _esim_profiles(self) -> list[dict[str, str]]:
         """Return selectable eSIM profiles for this modem."""
-        return [
-            profile
-            for profile in self.coordinator.esim_profiles_for_modem(self._modem_id)
-            if profile.get("profile_set", "1") == "1"
-        ]
+        return self.coordinator.esim_profiles_for_modem(self._modem_id)
 
     @property
     @override
@@ -123,7 +119,9 @@ class TeltonikaSimSelect(TeltonikaBaseSelect):
                 (
                     item
                     for item in self._esim_profiles()
-                    if str(item.get("id")) == active or str(item.get("name")) == active
+                    if is_esim_profile_active(item)
+                    or str(item.get("id")) == active
+                    or str(item.get("name")) == active
                 ),
                 None,
             )
@@ -166,11 +164,8 @@ class TeltonikaEsimSelect(TeltonikaBaseSelect):
         super().__init__(coordinator, modem_id, "active_esim_select")
 
     def _profiles(self) -> list[dict[str, str]]:
-        return [
-            profile
-            for profile in self.coordinator.esim_profiles_for_modem(self._modem_id)
-            if profile.get("profile_set", "1") == "1"
-        ]
+        """Return all installed eSIM profiles for this modem."""
+        return self.coordinator.esim_profiles_for_modem(self._modem_id)
 
     @property
     @override
@@ -185,7 +180,11 @@ class TeltonikaEsimSelect(TeltonikaBaseSelect):
     def current_option(self) -> str | None:
         """Return the enabled eSIM profile."""
         profile = next(
-            (profile for profile in self._profiles() if profile.get("enabled") == "1"),
+            (
+                profile
+                for profile in self._profiles()
+                if is_esim_profile_active(profile)
+            ),
             None,
         )
         return str(profile.get("name") or profile["id"]) if profile else None
