@@ -25,6 +25,8 @@ PLATFORMS = [
     Platform.BINARY_SENSOR,
     Platform.BUTTON,
     Platform.DEVICE_TRACKER,
+    Platform.EVENT,
+    Platform.NOTIFY,
     Platform.SELECT,
     Platform.SENSOR,
 ]

@@ -253,6 +253,23 @@
         "name": "{modem_name} SIM source"
       }
     },
+    "event": {
+      "sms_received": {
+        "name": "{modem_name} Received SMS",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "received": "Received"
+            }
+          }
+        }
+      }
+    },
+    "notify": {
+      "sms": {
+        "name": "{modem_name} Send SMS"
+      }
+    },
     "device_tracker": {
       "gps_location": {
         "name": "GPS location"

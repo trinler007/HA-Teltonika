@@ -84,6 +84,23 @@
         "name": "GPS-Position"
       }
     },
+    "event": {
+      "sms_received": {
+        "name": "{modem_name} Empfangene SMS",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "received": "Empfangen"
+            }
+          }
+        }
+      }
+    },
+    "notify": {
+      "sms": {
+        "name": "{modem_name} SMS senden"
+      }
+    },
     "select": {
       "active_esim": {
         "name": "{modem_name} Aktives eSIM-Profil"

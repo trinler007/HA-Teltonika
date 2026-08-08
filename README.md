@@ -38,6 +38,8 @@ und ergänzt insbesondere Funktionen für den Teltonika RUTX50 mit RutOS 7.24.x.
 - aktuelle Internet- und LAN-Übertragungsraten für RX und TX
 - Mobilfunk-Datenverbrauch für heute, gestern, aktuellen Monat und Vormonat,
   jeweils als RX, TX und Gesamt
+- SMS-Versand über eine Home-Assistant-`notify`-Entität und Empfang neuer SMS
+  über eine `event`-Entität der jeweils aktiven SIM/eSIM
 - DHCP-Erkennung, Reauthentifizierung und URL-Behandlung der Core-Integration
 - konfigurierbares Router-API-Abfrageintervall von 10 bis 3600 Sekunden
 
@@ -224,6 +226,48 @@ eSIM-Auswahlbutton bereit. Sobald Profile sichtbar sind, erscheinen sie als
 Dabei werden alle installierten Profile angeboten, unabhängig davon, welches
 Profil gerade aktiv ist. Die Integration fragt die Profilliste modembezogen ab;
 Profile ohne Modem-ID werden bei genau einem Modem diesem Modem zugeordnet.
+
+## SMS senden und empfangen
+
+Für jedes Modem erzeugt die Integration eine `notify`-Entität zum Versand
+von SMS. Weil die aktuelle Home-Assistant-Notify-Entität noch kein eigenes
+Empfängerfeld besitzt, wird die vollständige Zielrufnummer im Feld `title`
+angegeben. `message` enthält den SMS-Text. RutOS versendet die SMS über die
+gerade aktive SIM-Karte beziehungsweise das aktive eSIM-Profil.
+
+```yaml
+action: notify.send_message
+target:
+  entity_id: notify.technik_nx01_gw01_internal_modem_sms_senden
+data:
+  title: "+491701234567"
+  message: "Testnachricht von Home Assistant"
+```
+
+Die Ereignisentität `event.*_empfangene_sms` wird bei jeder neu erkannten SMS
+mit dem Ereignistyp `received` ausgelöst. Ihre Ereignisdaten enthalten, soweit
+von RutOS geliefert, `sender`, `message`, `date`, `status`, `id` und
+`modem_id`. Bereits beim Start vorhandene SMS werden nicht erneut ausgelöst.
+Nach einem SIM-Wechsel werden bestehende Nachrichten auf der neu ausgewählten
+Karte ebenfalls nur eingelesen und nicht als neu gemeldet.
+
+Beispiel für eine Automation:
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: event.technik_nx01_gw01_internal_modem_empfangene_sms
+conditions: []
+actions:
+  - action: persistent_notification.create
+    data:
+      title: "SMS von {{ trigger.to_state.attributes.sender }}"
+      message: "{{ trigger.to_state.attributes.message }}"
+```
+
+Der SMS-Eingang wird zusammen mit den regulären Routerdaten abgefragt. Die
+maximale Verzögerung entspricht daher ungefähr dem in den Integrationsoptionen
+eingestellten API-Abfrageintervall.
 
 ## Mobilfunk-Datenverbrauch
 

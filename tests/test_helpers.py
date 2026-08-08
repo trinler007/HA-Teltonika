@@ -359,6 +359,30 @@ class EsimProfileTests(unittest.TestCase):
         )
 
 
+class SmsTests(unittest.TestCase):
+    """Test SMS deduplication and active-SIM tracking helpers."""
+
+    def test_message_fingerprint_uses_router_message_fields(self) -> None:
+        message = {
+            "modem_id": "1-1",
+            "id": 7,
+            "date": "2026-08-08 12:00:00",
+            "sender": "+491234",
+            "message": "Test",
+            "status": "read",
+        }
+        self.assertEqual(
+            HELPERS.sms_message_fingerprint(message),
+            ("1-1", "7", "2026-08-08 12:00:00", "+491234", "Test"),
+        )
+
+    def test_modem_sim_identity_distinguishes_esim_profiles(self) -> None:
+        modem = SimpleNamespace(active_sim=2, esim_profile=None)
+        self.assertEqual(HELPERS.modem_sim_identity(modem), (2, None))
+        modem.esim_profile = "3"
+        self.assertEqual(HELPERS.modem_sim_identity(modem), (2, "3"))
+
+
 class LocationTests(unittest.TestCase):
     """Test calculated location helpers."""
 
