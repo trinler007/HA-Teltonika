@@ -679,6 +679,22 @@ def esim_profiles_for_modem(
     return result
 
 
+def sms_message_fingerprint(message: dict[str, Any]) -> tuple[str, ...]:
+    """Return a stable identity for an SMS across coordinator updates."""
+    return tuple(
+        str(message.get(key, ""))
+        for key in ("modem_id", "id", "date", "sender", "message")
+    )
+
+
+def modem_sim_identity(modem: Any) -> tuple[int | None, str | None]:
+    """Return the physical/eSIM identity currently used by a modem."""
+    return (
+        as_int(getattr(modem, "active_sim", None)),
+        str(profile) if (profile := getattr(modem, "esim_profile", None)) else None,
+    )
+
+
 def active_wan_interfaces(
     interfaces: list[dict[str, Any]],
     failover: dict[str, dict[str, Any]],

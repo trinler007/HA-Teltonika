@@ -74,6 +74,7 @@ class TeltonikaData:
     failover: dict[str, dict[str, Any]] = field(default_factory=dict)
     esim_profiles: list[dict[str, Any]] = field(default_factory=list)
     sim_cards: list[dict[str, Any]] = field(default_factory=list)
+    sms_messages: list[dict[str, Any]] = field(default_factory=list)
     system_usage: dict[str, Any] = field(default_factory=dict)
     transfer_rates: dict[str, float | None] = field(default_factory=dict)
     rate_interfaces: dict[str, list[str]] = field(default_factory=dict)
@@ -110,6 +111,7 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         self.base_url = base_url
         self.firmware_version: str | None = None
         self.esim_supported = False
+        self.sms_supported = False
         self._nmea_server: NmeaTcpServer | None = None
         self._nmea_last_update: float | None = None
         self._nmea_last_received: datetime | None = None
@@ -499,6 +501,7 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
                 failover,
                 esim_profiles,
                 sim_cards,
+                sms_messages,
                 system_usage,
                 traffic_usage,
             ) = await asyncio.gather(
@@ -506,6 +509,7 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
                 self._async_optional_data("failover/status"),
                 self._async_esim_profiles(modem_ids),
                 self._async_optional_data("sim_cards/config"),
+                self._async_optional_data("messages/status"),
                 self._async_optional_data("system/device/usage/status"),
                 self._async_update_traffic_usage(),
             )
@@ -537,6 +541,8 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         )
         self._interface_counters = interface_counters
         self._interface_counter_time = rate_time
+        if isinstance(sms_messages, list):
+            self.sms_supported = True
 
         return TeltonikaData(
             modems={
@@ -549,6 +555,7 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             failover=failover if isinstance(failover, dict) else {},
             esim_profiles=esim_profiles if isinstance(esim_profiles, list) else [],
             sim_cards=sim_cards if isinstance(sim_cards, list) else [],
+            sms_messages=sms_messages if isinstance(sms_messages, list) else [],
             system_usage=system_usage if isinstance(system_usage, dict) else {},
             transfer_rates=transfer_rates,
             rate_interfaces=rate_interfaces,
@@ -556,6 +563,27 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             location_name=self._location_name,
             location_details=self._location_details,
         )
+
+    async def async_send_sms(
+        self, modem_id: str, phone_number: str, message: str
+    ) -> None:
+        """Send an SMS through the modem's currently active SIM."""
+        response = await self.client.auth.request_json(
+            "POST",
+            "messages/actions/send",
+            json={
+                "data": {
+                    "number": phone_number,
+                    "message": message,
+                    "modem": modem_id,
+                }
+            },
+        )
+        if response.get("success"):
+            return
+        errors = response.get("errors") or []
+        error = errors[0].get("error") if errors else "Unknown API error"
+        raise TeltonikaConnectionError(f"Failed to send SMS: {error}")
 
     async def async_select_sim(self, modem_id: str, sim: int) -> None:
         """Select a physical SIM on a dual-SIM modem."""
