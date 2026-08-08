@@ -31,6 +31,38 @@ class CoordinatorSchedulingTests(unittest.TestCase):
         self.assertIn("_async_publish_live_data", calls)
         self.assertNotIn("async_set_updated_data", calls)
 
+    def test_optional_requests_are_bounded_and_time_limited(self) -> None:
+        """Guard startup from a slow optional RutOS endpoint."""
+        tree = ast.parse(COORDINATOR_PATH.read_text(encoding="utf-8"))
+        function = next(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.AsyncFunctionDef)
+            and node.name == "_async_optional_data"
+        )
+        async_contexts = [
+            item.context_expr
+            for node in ast.walk(function)
+            if isinstance(node, ast.AsyncWith)
+            for item in node.items
+        ]
+
+        self.assertTrue(
+            any(
+                isinstance(context, ast.Attribute)
+                and context.attr == "_optional_api_semaphore"
+                for context in async_contexts
+            )
+        )
+        self.assertTrue(
+            any(
+                isinstance(context, ast.Call)
+                and isinstance(context.func, ast.Attribute)
+                and context.func.attr == "timeout"
+                for context in async_contexts
+            )
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
