@@ -58,6 +58,8 @@ NMEA_STATUS_TIMEOUT = 30
 TRAFFIC_REFRESH_INTERVAL = 300
 GEOCODING_REFRESH_INTERVAL = 900
 GEOCODING_MIN_DISTANCE_KM = 1.0
+OPTIONAL_API_CONCURRENCY = 3
+OPTIONAL_API_TIMEOUT = 15
 SIM_SWITCH_POLL_DELAYS = (2, 3, 5, 5, 5, 5, 5)
 GEOCODING_USER_AGENT = (
     "HA-Teltonika/0.5.4 (+https://github.com/trinler007/HA-Teltonika)"
@@ -128,6 +130,7 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         self._geocoding_coordinates: tuple[float, float] | None = None
         self._interface_counters: dict[str, tuple[int | None, int | None]] = {}
         self._interface_counter_time: float | None = None
+        self._optional_api_semaphore = asyncio.Semaphore(OPTIONAL_API_CONCURRENCY)
 
     @property
     def nmea_enabled(self) -> bool:
@@ -430,11 +433,20 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
     ) -> Any:
         """Return data from an optional endpoint, or None when unsupported."""
         try:
-            response = await self.client.auth.request_json(
-                "GET", endpoint, params=params
-            )
+            async with self._optional_api_semaphore:
+                async with asyncio.timeout(OPTIONAL_API_TIMEOUT):
+                    response = await self.client.auth.request_json(
+                        "GET", endpoint, params=params
+                    )
         except TeltonikaAuthenticationError:
             raise
+        except TimeoutError:
+            _LOGGER.debug(
+                "Optional endpoint %s timed out after %s seconds",
+                endpoint,
+                OPTIONAL_API_TIMEOUT,
+            )
+            return None
         except TeltonikaConnectionError as err:
             _LOGGER.debug("Optional endpoint %s unavailable: %s", endpoint, err)
             return None
