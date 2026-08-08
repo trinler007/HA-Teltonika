@@ -83,6 +83,12 @@
     "binary_sensor": {
       "nmea_tcp_status": {
         "name": "NMEA TCP status"
+      },
+      "roaming": {
+        "name": "{modem_name} Roaming"
+      },
+      "sim_pin_lock": {
+        "name": "{sim_name} PIN lock enabled"
       }
     },
     "button": {
@@ -91,6 +97,14 @@
       },
       "select_sim": {
         "name": "{modem_name} Select SIM {sim_slot}"
+      },
+      "clear_sms_limit": {
+        "name": "{sim_name} Clear SMS limit counter"
+      }
+    },
+    "number": {
+      "sms_limit_count": {
+        "name": "{sim_name} SMS limit count"
       }
     },
     "sensor": {
@@ -243,6 +257,15 @@
       },
       "wan_ip_address": {
         "name": "WAN IP address"
+      },
+      "sms_sent": {
+        "name": "{sim_name} SMS sent"
+      },
+      "sms_remaining": {
+        "name": "{sim_name} SMS remaining"
+      },
+      "sms_limit_next_reset": {
+        "name": "{sim_name} SMS limit next reset"
       }
     },
     "select": {
@@ -251,6 +274,25 @@
       },
       "active_sim": {
         "name": "{modem_name} SIM source"
+      },
+      "sms_limit_period": {
+        "name": "{sim_name} SMS limit period",
+        "state": {
+          "day": "Day",
+          "week": "Week",
+          "month": "Month"
+        }
+      }
+    },
+    "switch": {
+      "flight_mode": {
+        "name": "{modem_name} Flight mode"
+      },
+      "data_roaming": {
+        "name": "{sim_name} Allow data roaming"
+      },
+      "sms_limit": {
+        "name": "{sim_name} SMS limit"
       }
     },
     "event": {

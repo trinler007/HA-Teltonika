@@ -589,6 +589,29 @@ def is_enabled(value: Any) -> bool:
     )
 
 
+def sim_card_name(sim_card: dict[str, Any]) -> str:
+    """Return a readable, stable name for a SIM configuration."""
+    position = str(sim_card.get("position") or "?")
+    profile = sim_card.get("esim_profile")
+    if profile is not None:
+        return f"eSIM profile {profile}"
+    return f"SIM {position}"
+
+
+def sim_card_status(
+    statuses: list[dict[str, Any]], sim_card_id: str
+) -> dict[str, Any] | None:
+    """Return status matching a SIM configuration section."""
+    return next(
+        (
+            status
+            for status in statuses
+            if str(status.get("section_name")) == sim_card_id
+        ),
+        None,
+    )
+
+
 def is_esim_profile_active(profile: Any) -> bool:
     """Return whether RutOS reports an eSIM profile as active."""
     if not isinstance(profile, dict):

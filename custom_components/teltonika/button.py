@@ -6,12 +6,13 @@ from typing import override
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import TeltonikaConfigEntry
 from .coordinator import TeltonikaDataUpdateCoordinator
-from .helpers import supports_sim_switch
+from .helpers import sim_card_name, supports_sim_switch
 
 
 async def async_setup_entry(
@@ -51,6 +52,10 @@ async def async_setup_entry(
             known_esim_modems.update(new_esim_modems)
 
     _async_add_buttons()
+    async_add_entities(
+        TeltonikaSmsLimitResetButton(coordinator, sim_card)
+        for sim_card in coordinator.data.sim_cards
+    )
     entry.async_on_unload(coordinator.async_add_listener(_async_add_buttons))
 
 
@@ -121,3 +126,32 @@ class TeltonikaEsimButton(
     async def async_press(self) -> None:
         """Set the eSIM as default and make it active."""
         await self.coordinator.async_activate_esim(self._modem_id)
+
+
+class TeltonikaSmsLimitResetButton(
+    CoordinatorEntity[TeltonikaDataUpdateCoordinator], ButtonEntity
+):
+    """Clear the sent-SMS limit counter for one SIM configuration."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "clear_sms_limit"
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self,
+        coordinator: TeltonikaDataUpdateCoordinator,
+        sim_card: dict[str, object],
+    ) -> None:
+        super().__init__(coordinator)
+        self._sim_card_id = str(sim_card["id"])
+        self._attr_device_info = coordinator.device_info
+        assert coordinator.config_entry is not None
+        entry_id = (
+            coordinator.config_entry.unique_id or coordinator.config_entry.entry_id
+        )
+        self._attr_unique_id = f"{entry_id}_{self._sim_card_id}_clear_sms_limit"
+        self._attr_translation_placeholders = {"sim_name": sim_card_name(sim_card)}
+
+    @override
+    async def async_press(self) -> None:
+        await self.coordinator.async_clear_sms_limit(self._sim_card_id)

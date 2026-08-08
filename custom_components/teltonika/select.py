@@ -6,12 +6,13 @@ from typing import ClassVar, override
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import TeltonikaConfigEntry
 from .coordinator import TeltonikaDataUpdateCoordinator
-from .helpers import is_esim_profile_active, supports_sim_switch
+from .helpers import is_esim_profile_active, sim_card_name, supports_sim_switch
 
 
 async def async_setup_entry(
@@ -23,6 +24,11 @@ async def async_setup_entry(
     coordinator = entry.runtime_data
     known_modems: set[str] = set()
     known_esim_modems: set[str] = set()
+
+    async_add_entities(
+        TeltonikaSmsLimitPeriodSelect(coordinator, sim_card)
+        for sim_card in coordinator.data.sim_cards
+    )
 
     @callback
     def _async_add_selectors() -> None:
@@ -198,3 +204,47 @@ class TeltonikaEsimSelect(TeltonikaBaseSelect):
             if str(profile.get("name") or profile["id"]) == option
         )
         await self.coordinator.async_select_esim_profile(str(profile["id"]))
+
+
+class TeltonikaSmsLimitPeriodSelect(
+    CoordinatorEntity[TeltonikaDataUpdateCoordinator], SelectEntity
+):
+    """Configure the SMS limit reset period for one SIM."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "sms_limit_period"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_options = ["day", "week", "month"]
+
+    def __init__(
+        self, coordinator: TeltonikaDataUpdateCoordinator, sim_card: dict[str, str]
+    ) -> None:
+        super().__init__(coordinator)
+        self._sim_card_id = str(sim_card["id"])
+        self._attr_device_info = coordinator.device_info
+        assert coordinator.config_entry is not None
+        entry_id = (
+            coordinator.config_entry.unique_id or coordinator.config_entry.entry_id
+        )
+        self._attr_unique_id = f"{entry_id}_{self._sim_card_id}_sms_limit_period"
+        self._attr_translation_placeholders = {"sim_name": sim_card_name(sim_card)}
+
+    @property
+    @override
+    def current_option(self) -> str | None:
+        config = next(
+            (
+                item
+                for item in self.coordinator.data.sim_cards
+                if str(item.get("id")) == self._sim_card_id
+            ),
+            None,
+        )
+        value = str(config.get("sms_limit")) if config else None
+        return value if value in self.options else None
+
+    @override
+    async def async_select_option(self, option: str) -> None:
+        await self.coordinator.async_update_sim_card(
+            self._sim_card_id, {"sms_limit": option}
+        )

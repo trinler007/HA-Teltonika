@@ -27,8 +27,10 @@ PLATFORMS = [
     Platform.DEVICE_TRACKER,
     Platform.EVENT,
     Platform.NOTIFY,
+    Platform.NUMBER,
     Platform.SELECT,
     Platform.SENSOR,
+    Platform.SWITCH,
 ]
 
 TeltonikaConfigEntry = ConfigEntry[TeltonikaDataUpdateCoordinator]

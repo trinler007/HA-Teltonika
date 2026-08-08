@@ -227,6 +227,29 @@ Dabei werden alle installierten Profile angeboten, unabhängig davon, welches
 Profil gerade aktiv ist. Die Integration fragt die Profilliste modembezogen ab;
 Profile ohne Modem-ID werden bei genau einem Modem diesem Modem zugeordnet.
 
+## Modem- und SIM-Verwaltung
+
+Unterstützte RutOS-Versionen stellen einen Flugmodus-Schalter pro Modem sowie
+einen aktuellen Roaming-Diagnosesensor bereit. Der Flugmodus wirkt direkt auf
+die globale Modemkonfiguration. Beim Einschalten wird die Mobilfunkverbindung
+getrennt; die lokale Routerverbindung bleibt davon normalerweise unberührt.
+
+Für jeden Eintrag aus `/api/sim_cards/config` – physische SIMs und einzelne
+eSIM-Profile – erzeugt die Integration folgende Entitäten:
+
+- Diagnose, ob die PIN-Sperre der SIM aktiviert ist
+- Schalter **Datenroaming erlaubt**
+- Schalter und Zahlenfeld für das SMS-Limit
+- Auswahl des SMS-Limit-Zeitraums: Tag, Woche oder Monat
+- Diagnosewerte für gesendete und verbleibende SMS sowie den nächsten Reset
+- Button zum manuellen Zurücksetzen des SMS-Limit-Zählers
+
+Der Datenroaming-Schalter bildet das negative RutOS-Feld `deny_roaming`
+bewusst benutzerfreundlich ab: **Ein** erlaubt Datenroaming (`deny_roaming=0`),
+**Aus** sperrt es (`deny_roaming=1`). Limit-Zähler und Reset-Zeit werden von
+RutOS nur geliefert, wenn für die jeweilige SIM ein SMS-Limit aktiv ist; die
+entsprechenden Diagnosesensoren sind andernfalls nicht verfügbar.
+
 ## SMS senden und empfangen
 
 Für jedes Modem erzeugt die Integration eine `notify`-Entität zum Versand
