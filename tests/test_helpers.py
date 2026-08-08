@@ -246,6 +246,27 @@ class SimSwitchTests(unittest.TestCase):
         )
 
 
+class SimManagementTests(unittest.TestCase):
+    """Test per-SIM labels and status matching."""
+
+    def test_names_physical_and_esim_configurations(self) -> None:
+        self.assertEqual(HELPERS.sim_card_name({"position": "1"}), "SIM 1")
+        self.assertEqual(
+            HELPERS.sim_card_name({"position": "3", "esim_profile": "2"}),
+            "eSIM profile 2",
+        )
+
+    def test_status_matches_configuration_section(self) -> None:
+        statuses = [
+            {"section_name": "cfg01", "pin_lock_enabled": "0"},
+            {"section_name": "cfg02", "pin_lock_enabled": "1"},
+        ]
+        self.assertEqual(
+            HELPERS.sim_card_status(statuses, "cfg02"), statuses[1]
+        )
+        self.assertIsNone(HELPERS.sim_card_status(statuses, "missing"))
+
+
 class ReverseGeocodingTests(unittest.TestCase):
     """Test worldwide reverse-geocoding result extraction."""
 

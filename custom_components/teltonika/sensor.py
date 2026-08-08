@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, override
 
 from homeassistant.components.sensor import (
@@ -29,6 +30,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.typing import StateType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 from teltasync.modems import ModemStatusFull
 
 from . import TeltonikaConfigEntry
@@ -44,6 +46,8 @@ from .helpers import (
     distance_km,
     interface_ip_address,
     maidenhead_locator,
+    sim_card_name,
+    sim_card_status,
     system_cpu_usage,
     system_memory_usage,
 )
@@ -303,6 +307,15 @@ async def async_setup_entry(
                 TeltonikaTrafficUsageSensor(coordinator, period, metric)
                 for period in TRAFFIC_PERIODS
                 for metric in TRAFFIC_METRICS
+            )
+            entities.extend(
+                entity
+                for sim_card in coordinator.data.sim_cards
+                for entity in (
+                    TeltonikaSmsSentSensor(coordinator, sim_card),
+                    TeltonikaSmsRemainingSensor(coordinator, sim_card),
+                    TeltonikaSmsLimitResetSensor(coordinator, sim_card),
+                )
             )
             globals_added = True
         if entities:
@@ -976,3 +989,105 @@ class TeltonikaLocationNameSensor(TeltonikaBaseSensor):
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return the full display name and attribution."""
         return self.coordinator.data.location_details
+
+
+class TeltonikaSimStatusSensor(TeltonikaBaseSensor):
+    """Base class for sensors sourced from a SIM status section."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self,
+        coordinator: TeltonikaDataUpdateCoordinator,
+        sim_card: dict[str, Any],
+        suffix: str,
+    ) -> None:
+        self._sim_card_id = str(sim_card["id"])
+        super().__init__(coordinator, f"{self._sim_card_id}_{suffix}")
+        self._attr_translation_placeholders = {"sim_name": sim_card_name(sim_card)}
+
+    @property
+    def status(self) -> dict[str, Any] | None:
+        return sim_card_status(
+            self.coordinator.data.sim_card_status, self._sim_card_id
+        )
+
+
+class TeltonikaSmsSentSensor(TeltonikaSimStatusSensor):
+    """Show sent SMS in the current limit period."""
+
+    _attr_translation_key = "sms_sent"
+    _attr_state_class = SensorStateClass.TOTAL
+
+    def __init__(
+        self, coordinator: TeltonikaDataUpdateCoordinator, sim_card: dict[str, Any]
+    ) -> None:
+        super().__init__(coordinator, sim_card, "sms_sent")
+
+    @property
+    @override
+    def available(self) -> bool:
+        return super().available and bool(self.status) and "sms_sent" in self.status
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        return as_int(self.status.get("sms_sent")) if self.status else None
+
+
+class TeltonikaSmsRemainingSensor(TeltonikaSimStatusSensor):
+    """Show how many SMS remain in the current limit period."""
+
+    _attr_translation_key = "sms_remaining"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self, coordinator: TeltonikaDataUpdateCoordinator, sim_card: dict[str, Any]
+    ) -> None:
+        super().__init__(coordinator, sim_card, "sms_remaining")
+
+    @property
+    @override
+    def available(self) -> bool:
+        status = self.status
+        return (
+            super().available
+            and bool(status)
+            and as_int(status.get("sms_limit")) is not None
+            and as_int(status.get("sms_sent")) is not None
+        )
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        status = self.status or {}
+        limit = as_int(status.get("sms_limit"))
+        sent = as_int(status.get("sms_sent"))
+        return max(0, limit - sent) if limit is not None and sent is not None else None
+
+
+class TeltonikaSmsLimitResetSensor(TeltonikaSimStatusSensor):
+    """Show the next automatic SMS limit reset."""
+
+    _attr_translation_key = "sms_limit_next_reset"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(
+        self, coordinator: TeltonikaDataUpdateCoordinator, sim_card: dict[str, Any]
+    ) -> None:
+        super().__init__(coordinator, sim_card, "sms_limit_next_reset")
+
+    @property
+    @override
+    def available(self) -> bool:
+        return (
+            super().available
+            and bool(self.status)
+            and as_int(self.status.get("sms_due_reset_time")) is not None
+        )
+
+    @property
+    @override
+    def native_value(self) -> datetime | None:
+        timestamp = as_int((self.status or {}).get("sms_due_reset_time"))
+        return dt_util.utc_from_timestamp(timestamp) if timestamp is not None else None

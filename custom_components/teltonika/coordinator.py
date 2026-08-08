@@ -74,6 +74,8 @@ class TeltonikaData:
     failover: dict[str, dict[str, Any]] = field(default_factory=dict)
     esim_profiles: list[dict[str, Any]] = field(default_factory=list)
     sim_cards: list[dict[str, Any]] = field(default_factory=list)
+    sim_card_status: list[dict[str, Any]] = field(default_factory=list)
+    modem_configs: dict[str, dict[str, Any]] = field(default_factory=dict)
     sms_messages: list[dict[str, Any]] = field(default_factory=list)
     system_usage: dict[str, Any] = field(default_factory=dict)
     transfer_rates: dict[str, float | None] = field(default_factory=dict)
@@ -501,6 +503,7 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
                 failover,
                 esim_profiles,
                 sim_cards,
+                sim_card_status,
                 sms_messages,
                 system_usage,
                 traffic_usage,
@@ -509,10 +512,24 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
                 self._async_optional_data("failover/status"),
                 self._async_esim_profiles(modem_ids),
                 self._async_optional_data("sim_cards/config"),
+                self._async_optional_data("sim_cards/status"),
                 self._async_optional_data("messages/status"),
                 self._async_optional_data("system/device/usage/status"),
                 self._async_update_traffic_usage(),
             )
+            modem_config_values = await asyncio.gather(
+                *(
+                    self._async_optional_data(f"modems/{modem_id}/global")
+                    for modem_id in modem_ids
+                )
+            )
+            modem_configs = {
+                modem_id: value
+                for modem_id, value in zip(
+                    modem_ids, modem_config_values, strict=True
+                )
+                if isinstance(value, dict)
+            }
             if not use_nmea:
                 gps_from_api = await self._async_optional_data("gps/position/status")
         except TeltonikaAuthenticationError as err:
@@ -555,6 +572,10 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             failover=failover if isinstance(failover, dict) else {},
             esim_profiles=esim_profiles if isinstance(esim_profiles, list) else [],
             sim_cards=sim_cards if isinstance(sim_cards, list) else [],
+            sim_card_status=(
+                sim_card_status if isinstance(sim_card_status, list) else []
+            ),
+            modem_configs=modem_configs,
             sms_messages=sms_messages if isinstance(sms_messages, list) else [],
             system_usage=system_usage if isinstance(system_usage, dict) else {},
             transfer_rates=transfer_rates,
@@ -584,6 +605,46 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         errors = response.get("errors") or []
         error = errors[0].get("error") if errors else "Unknown API error"
         raise TeltonikaConnectionError(f"Failed to send SMS: {error}")
+
+    async def async_set_flight_mode(self, modem_id: str, enabled: bool) -> None:
+        """Enable or disable flight mode for a modem."""
+        await self._async_put_config(
+            f"modems/{modem_id}/global",
+            {"flight_mode": "1" if enabled else "0"},
+            "flight mode",
+        )
+
+    async def async_update_sim_card(
+        self, sim_card_id: str, values: dict[str, str]
+    ) -> None:
+        """Update one SIM-card configuration section."""
+        await self._async_put_config(
+            f"sim_cards/config/{sim_card_id}", values, "SIM-card configuration"
+        )
+
+    async def async_clear_sms_limit(self, sim_card_id: str) -> None:
+        """Clear the sent-SMS counter for one SIM-card configuration."""
+        response = await self.client.auth.request_json(
+            "POST", f"sim_cards/{sim_card_id}/actions/clear_sms_limit"
+        )
+        if not response.get("success"):
+            errors = response.get("errors") or []
+            message = errors[0].get("error") if errors else "Unknown API error"
+            raise TeltonikaConnectionError(f"Failed to clear SMS limit: {message}")
+        await self.async_request_refresh()
+
+    async def _async_put_config(
+        self, endpoint: str, values: dict[str, str], description: str
+    ) -> None:
+        """Update a RutOS configuration endpoint and refresh state."""
+        response = await self.client.auth.request_json(
+            "PUT", endpoint, json={"data": values}
+        )
+        if not response.get("success"):
+            errors = response.get("errors") or []
+            message = errors[0].get("error") if errors else "Unknown API error"
+            raise TeltonikaConnectionError(f"Failed to update {description}: {message}")
+        await self.async_request_refresh()
 
     async def async_select_sim(self, modem_id: str, sim: int) -> None:
         """Select a physical SIM on a dual-SIM modem."""
