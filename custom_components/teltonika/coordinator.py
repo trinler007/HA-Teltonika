@@ -32,9 +32,11 @@ from .const import (
     DOMAIN,
 )
 from .helpers import (
+    active_sim_card_configuration,
     active_wan_interfaces,
     as_float,
     as_int,
+    data_limit_for_sim_card,
     data_usage_totals,
     distance_km,
     esim_profiles_for_modem,
@@ -78,6 +80,8 @@ class TeltonikaData:
     sim_cards: list[dict[str, Any]] = field(default_factory=list)
     sim_card_status: list[dict[str, Any]] = field(default_factory=list)
     modem_configs: dict[str, dict[str, Any]] = field(default_factory=dict)
+    data_limit_configs: list[dict[str, Any]] = field(default_factory=list)
+    data_limit_status: list[dict[str, Any]] = field(default_factory=list)
     sms_messages: list[dict[str, Any]] = field(default_factory=list)
     system_usage: dict[str, Any] = field(default_factory=dict)
     transfer_rates: dict[str, float | None] = field(default_factory=dict)
@@ -137,6 +141,40 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         """Return whether the optional NMEA receiver is enabled."""
         assert self.config_entry is not None
         return bool(self.config_entry.options.get(CONF_NMEA_ENABLED, False))
+
+    @property
+    def active_modem(self) -> ModemStatusFull | None:
+        """Return the primary modem, or the first available modem."""
+        return next(
+            (
+                modem
+                for modem in self.data.modems.values()
+                if getattr(modem, "primary", False)
+            ),
+            next(iter(self.data.modems.values()), None),
+        )
+
+    @property
+    def active_sim_card(self) -> dict[str, Any] | None:
+        """Return the currently active SIM configuration."""
+        modem = self.active_modem
+        if modem is None:
+            return None
+        return active_sim_card_configuration(self.data.sim_cards, modem)
+
+    @property
+    def active_data_limit(
+        self,
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        """Return data-limit configuration and status for the active SIM."""
+        sim_card = self.active_sim_card
+        if sim_card is None:
+            return None, None
+        return data_limit_for_sim_card(
+            self.data.data_limit_configs,
+            self.data.data_limit_status,
+            sim_card,
+        )
 
     @property
     def nmea_active(self) -> bool:
@@ -516,6 +554,8 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
                 esim_profiles,
                 sim_cards,
                 sim_card_status,
+                data_limit_configs,
+                data_limit_status,
                 sms_messages,
                 system_usage,
                 traffic_usage,
@@ -525,6 +565,8 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
                 self._async_esim_profiles(modem_ids),
                 self._async_optional_data("sim_cards/config"),
                 self._async_optional_data("sim_cards/status"),
+                self._async_optional_data("data_limit/config"),
+                self._async_optional_data("data_limit/status"),
                 self._async_optional_data("messages/status"),
                 self._async_optional_data("system/device/usage/status"),
                 self._async_update_traffic_usage(),
@@ -588,6 +630,12 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
                 sim_card_status if isinstance(sim_card_status, list) else []
             ),
             modem_configs=modem_configs,
+            data_limit_configs=(
+                data_limit_configs if isinstance(data_limit_configs, list) else []
+            ),
+            data_limit_status=(
+                data_limit_status if isinstance(data_limit_status, list) else []
+            ),
             sms_messages=sms_messages if isinstance(sms_messages, list) else [],
             system_usage=system_usage if isinstance(system_usage, dict) else {},
             transfer_rates=transfer_rates,
@@ -643,6 +691,27 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
             errors = response.get("errors") or []
             message = errors[0].get("error") if errors else "Unknown API error"
             raise TeltonikaConnectionError(f"Failed to clear SMS limit: {message}")
+        await self.async_request_refresh()
+
+    async def async_update_data_limit(
+        self, config_id: str, values: dict[str, str]
+    ) -> None:
+        """Update one data-limit configuration."""
+        await self._async_put_config(
+            f"data_limit/config/{config_id}", values, "data-limit configuration"
+        )
+
+    async def async_clear_data_limit(self, interface: str) -> None:
+        """Clear the data-limit counter for an interface."""
+        response = await self.client.auth.request_json(
+            "POST",
+            "data_limit/actions/clear",
+            json={"data": {"interface": interface}},
+        )
+        if not response.get("success"):
+            errors = response.get("errors") or []
+            message = errors[0].get("error") if errors else "Unknown API error"
+            raise TeltonikaConnectionError(f"Failed to clear data limit: {message}")
         await self.async_request_refresh()
 
     async def _async_put_config(

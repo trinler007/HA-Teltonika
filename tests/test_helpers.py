@@ -538,6 +538,86 @@ class InterfaceTests(unittest.TestCase):
         self.assertEqual(reset_rates["internet_tx"], 0.00008)
 
 
+class ActiveSimDataLimitTests(unittest.TestCase):
+    """Test active-SIM and data-limit interface routing."""
+
+    def setUp(self) -> None:
+        self.sim_cards = [
+            {"id": "cfg01", "modem": "2-1", "position": "1"},
+            {"id": "cfg02", "modem": "2-1", "position": "2"},
+            {
+                "id": "cfg03",
+                "modem": "2-1",
+                "position": "3",
+                "esim_profile": "1",
+            },
+            {
+                "id": "cfg06",
+                "modem": "2-1",
+                "position": "3",
+                "esim_profile": "2",
+            },
+        ]
+        self.configs = [
+            {"id": "mob1s1a1", "data_limit": "500000"},
+            {"id": "mob1s2a1"},
+            {"id": "mob1s3a1e2"},
+            {"id": "wan3"},
+        ]
+        self.statuses = [
+            {"id": "mob1s1a1", "interface": "mob1s1a1", "enabled": "1"},
+            {"id": "mob1s2a1", "interface": "mob1s2a1", "enabled": "0"},
+            {
+                "id": "mob1s3a1e2",
+                "interface": "mob1s3a1e2",
+                "enabled": "0",
+            },
+            {"id": "wan3", "interface": "mob1s3a1e1", "enabled": "0"},
+        ]
+
+    def test_active_physical_sim_configuration(self) -> None:
+        modem = SimpleNamespace(id="2-1", active_sim=2, esim_profile=None)
+        self.assertEqual(
+            HELPERS.active_sim_card_configuration(self.sim_cards, modem)["id"],
+            "cfg02",
+        )
+
+    def test_active_esim_profile_configuration(self) -> None:
+        modem = SimpleNamespace(id="2-1", active_sim=3, esim_profile="2")
+        self.assertEqual(
+            HELPERS.active_sim_card_configuration(self.sim_cards, modem)["id"],
+            "cfg06",
+        )
+
+    def test_active_esim_without_profile_uses_primary_configuration(self) -> None:
+        self.sim_cards[2]["primary"] = "1"
+        modem = SimpleNamespace(id="2-1", active_sim=3, esim_profile=None)
+        self.assertEqual(
+            HELPERS.active_sim_card_configuration(self.sim_cards, modem)["id"],
+            "cfg03",
+        )
+
+    def test_physical_and_esim_interfaces_are_matched(self) -> None:
+        config, status = HELPERS.data_limit_for_sim_card(
+            self.configs, self.statuses, self.sim_cards[0]
+        )
+        self.assertEqual(config["id"], "mob1s1a1")
+        self.assertEqual(status["interface"], "mob1s1a1")
+
+        config, status = HELPERS.data_limit_for_sim_card(
+            self.configs, self.statuses, self.sim_cards[3]
+        )
+        self.assertEqual(config["id"], "mob1s3a1e2")
+        self.assertEqual(status["interface"], "mob1s3a1e2")
+
+    def test_esim_runtime_interface_can_map_to_wan_config_id(self) -> None:
+        config, status = HELPERS.data_limit_for_sim_card(
+            self.configs, self.statuses, self.sim_cards[2]
+        )
+        self.assertEqual(config["id"], "wan3")
+        self.assertEqual(status["interface"], "mob1s3a1e1")
+
+
 class ActiveWanTests(unittest.TestCase):
     """Test active Internet interface selection."""
 

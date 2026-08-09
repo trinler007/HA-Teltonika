@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 from itertools import pairwise
 from typing import Any
@@ -610,6 +611,67 @@ def sim_card_status(
         ),
         None,
     )
+
+
+def active_sim_card_configuration(
+    sim_cards: list[dict[str, Any]], modem: Any
+) -> dict[str, Any] | None:
+    """Return the SIM configuration currently used by a modem."""
+    modem_id = str(getattr(modem, "id", ""))
+    esim_profile = getattr(modem, "esim_profile", None)
+    active_sim = as_int(getattr(modem, "active_sim", None))
+    if esim_profile or active_sim == 3:
+        return esim_sim_card_for_modem(
+            sim_cards,
+            modem_id,
+            str(esim_profile) if esim_profile is not None else None,
+        )
+
+    return next(
+        (
+            sim_card
+            for sim_card in sim_cards
+            if str(sim_card.get("modem")) == modem_id
+            and not is_esim_sim_card(sim_card)
+            and as_int(sim_card.get("position")) == active_sim
+        ),
+        None,
+    )
+
+
+def data_limit_for_sim_card(
+    configs: list[dict[str, Any]],
+    statuses: list[dict[str, Any]],
+    sim_card: dict[str, Any],
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Match a SIM configuration to its RutOS data-limit interface."""
+    position = as_int(sim_card.get("position"))
+    if position is None:
+        return None, None
+    esim_profile = sim_card.get("esim_profile")
+    matched_status = None
+    for status in statuses:
+        interface = str(status.get("interface") or "")
+        if re.search(rf"s{position}a\d+", interface) is None:
+            continue
+        interface_profile = re.search(r"e([^/]+)$", interface)
+        if esim_profile is None and interface_profile is not None:
+            continue
+        if esim_profile is not None and (
+            interface_profile is None
+            or interface_profile.group(1) != str(esim_profile)
+        ):
+            continue
+        matched_status = status
+        break
+
+    if matched_status is None:
+        return None, None
+    config_id = str(matched_status.get("id") or "")
+    config = next(
+        (item for item in configs if str(item.get("id")) == config_id), None
+    )
+    return config, matched_status
 
 
 def is_esim_profile_active(profile: Any) -> bool:

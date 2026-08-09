@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, override
+from typing import Any, ClassVar, override
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.core import HomeAssistant, callback
@@ -28,6 +28,13 @@ async def async_setup_entry(
     async_add_entities(
         TeltonikaSmsLimitPeriodSelect(coordinator, sim_card)
         for sim_card in coordinator.data.sim_cards
+    )
+    async_add_entities(
+        [
+            TeltonikaCurrentSmsLimitPeriodSelect(coordinator),
+            TeltonikaCurrentDataLimitPeriodSelect(coordinator),
+            TeltonikaCurrentDataLimitResetSelect(coordinator),
+        ]
     )
 
     @callback
@@ -248,3 +255,162 @@ class TeltonikaSmsLimitPeriodSelect(
         await self.coordinator.async_update_sim_card(
             self._sim_card_id, {"sms_limit": option}
         )
+
+
+class TeltonikaCurrentSelect(
+    CoordinatorEntity[TeltonikaDataUpdateCoordinator], SelectEntity
+):
+    """Base class for an active-SIM select entity."""
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self, coordinator: TeltonikaDataUpdateCoordinator, suffix: str
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_device_info = coordinator.device_info
+        assert coordinator.config_entry is not None
+        entry_id = (
+            coordinator.config_entry.unique_id or coordinator.config_entry.entry_id
+        )
+        self._attr_unique_id = f"{entry_id}_current_sim_{suffix}"
+
+
+class TeltonikaCurrentSmsLimitPeriodSelect(TeltonikaCurrentSelect):
+    """Configure the active SIM SMS-limit period."""
+
+    _attr_translation_key = "current_sms_limit_period"
+    _attr_options = ["day", "week", "month"]
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "sms_limit_period")
+
+    @property
+    @override
+    def available(self) -> bool:
+        return super().available and self.coordinator.active_sim_card is not None
+
+    @property
+    @override
+    def current_option(self) -> str | None:
+        config = self.coordinator.active_sim_card or {}
+        value = str(config.get("sms_limit") or "")
+        return value if value in self.options else None
+
+    @override
+    async def async_select_option(self, option: str) -> None:
+        config = self.coordinator.active_sim_card
+        if config is not None:
+            await self.coordinator.async_update_sim_card(
+                str(config["id"]), {"sms_limit": option}
+            )
+
+
+class TeltonikaCurrentDataLimitPeriodSelect(TeltonikaCurrentSelect):
+    """Configure the active SIM data-limit reset period."""
+
+    _attr_translation_key = "current_data_limit_period"
+    _attr_options = ["day", "week", "month"]
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "data_limit_period")
+
+    @property
+    @override
+    def available(self) -> bool:
+        config, _status = self.coordinator.active_data_limit
+        return super().available and config is not None
+
+    @property
+    @override
+    def current_option(self) -> str | None:
+        config, _status = self.coordinator.active_data_limit
+        value = str(config.get("period") or "") if config else ""
+        return value if value in self.options else None
+
+    @override
+    async def async_select_option(self, option: str) -> None:
+        config, _status = self.coordinator.active_data_limit
+        if config is None:
+            return
+        schedule_key = {
+            "day": "reset_hour",
+            "week": "reset_weekday",
+            "month": "reset_day",
+        }[option]
+        await self.coordinator.async_update_data_limit(
+            str(config["id"]),
+            {
+                "period": option,
+                schedule_key: str(
+                    config.get(schedule_key) or ("0" if option == "day" else "1")
+                ),
+            },
+        )
+
+
+class TeltonikaCurrentDataLimitResetSelect(TeltonikaCurrentSelect):
+    """Configure the period-dependent active SIM reset point."""
+
+    _attr_translation_key = "current_data_limit_reset"
+    _weekdays: ClassVar[list[str]] = [
+        "monday",
+        "tuesday",
+        "wednesday",
+        "thursday",
+        "friday",
+        "saturday",
+        "sunday",
+    ]
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "data_limit_reset")
+
+    @property
+    def _config(self) -> dict[str, Any] | None:
+        config, _status = self.coordinator.active_data_limit
+        return config
+
+    @property
+    @override
+    def available(self) -> bool:
+        return super().available and self._config is not None
+
+    @property
+    @override
+    def options(self) -> list[str]:
+        period = str((self._config or {}).get("period") or "month")
+        if period == "day":
+            return [f"{hour:02}:00" for hour in range(24)]
+        if period == "week":
+            return self._weekdays
+        return [str(day) for day in range(1, 32)]
+
+    @property
+    @override
+    def current_option(self) -> str | None:
+        config = self._config or {}
+        period = str(config.get("period") or "month")
+        if period == "day":
+            hour = int(config.get("reset_hour") or 0)
+            return f"{hour:02}:00"
+        if period == "week":
+            weekday = int(config.get("reset_weekday") or 1)
+            return self._weekdays[weekday - 1] if 1 <= weekday <= 7 else None
+        value = str(config.get("reset_day") or "1")
+        return value if value in self.options else None
+
+    @override
+    async def async_select_option(self, option: str) -> None:
+        config = self._config
+        if config is None:
+            return
+        period = str(config.get("period") or "month")
+        if period == "day":
+            values = {"reset_hour": str(int(option.split(":", maxsplit=1)[0]))}
+        elif period == "week":
+            values = {"reset_weekday": str(self._weekdays.index(option) + 1)}
+        else:
+            values = {"reset_day": option}
+        await self.coordinator.async_update_data_limit(str(config["id"]), values)
