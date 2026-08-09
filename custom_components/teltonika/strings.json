@@ -89,6 +89,9 @@
       },
       "sim_pin_lock": {
         "name": "{sim_name} PIN lock enabled"
+      },
+      "current_sim_pin_lock": {
+        "name": "Current SIM PIN lock enabled"
       }
     },
     "button": {
@@ -100,11 +103,26 @@
       },
       "clear_sms_limit": {
         "name": "{sim_name} Clear SMS limit counter"
+      },
+      "current_clear_sms_limit": {
+        "name": "Clear current SIM SMS limit counter"
+      },
+      "current_clear_data_limit": {
+        "name": "Clear current SIM data counter"
       }
     },
     "number": {
       "sms_limit_count": {
         "name": "{sim_name} SMS limit count"
+      },
+      "current_sms_limit_count": {
+        "name": "Current SIM SMS limit count"
+      },
+      "current_data_limit_amount": {
+        "name": "Current SIM data limit"
+      },
+      "current_data_warning_threshold": {
+        "name": "Current SIM data warning threshold"
       }
     },
     "sensor": {
@@ -266,6 +284,27 @@
       },
       "sms_limit_next_reset": {
         "name": "{sim_name} SMS limit next reset"
+      },
+      "current_sms_sent": {
+        "name": "Current SIM SMS sent"
+      },
+      "current_sms_remaining": {
+        "name": "Current SIM SMS remaining"
+      },
+      "current_sms_limit_next_reset": {
+        "name": "Current SIM SMS limit next reset"
+      },
+      "current_data_limit_used": {
+        "name": "Current SIM data used"
+      },
+      "current_data_limit_remaining": {
+        "name": "Current SIM data remaining"
+      },
+      "current_data_limit_used_percentage": {
+        "name": "Current SIM data limit used"
+      },
+      "current_data_limit_next_reset": {
+        "name": "Current SIM data limit next reset"
       }
     },
     "select": {
@@ -282,6 +321,22 @@
           "week": "Week",
           "month": "Month"
         }
+      },
+      "current_sms_limit_period": {
+        "name": "Current SIM SMS limit period",
+        "state": {"day": "Day", "week": "Week", "month": "Month"}
+      },
+      "current_data_limit_period": {
+        "name": "Current SIM data limit period",
+        "state": {"day": "Day", "week": "Week", "month": "Month"}
+      },
+      "current_data_limit_reset": {
+        "name": "Current SIM data limit reset",
+        "state": {
+          "monday": "Monday", "tuesday": "Tuesday", "wednesday": "Wednesday",
+          "thursday": "Thursday", "friday": "Friday", "saturday": "Saturday",
+          "sunday": "Sunday"
+        }
       }
     },
     "switch": {
@@ -293,6 +348,23 @@
       },
       "sms_limit": {
         "name": "{sim_name} SMS limit"
+      },
+      "current_data_roaming": {
+        "name": "Current SIM allow data roaming"
+      },
+      "current_sms_limit": {
+        "name": "Current SIM SMS limit"
+      },
+      "current_data_limit": {
+        "name": "Current SIM data limit"
+      },
+      "current_data_warning": {
+        "name": "Current SIM data warning"
+      }
+    },
+    "text": {
+      "current_data_warning_phone": {
+        "name": "Current SIM data warning phone number"
       }
     },
     "event": {

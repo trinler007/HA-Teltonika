@@ -35,6 +35,7 @@ async def async_setup_entry(
             TeltonikaSimPinLockBinarySensor(coordinator, sim_card)
             for sim_card in coordinator.data.sim_cards
         ]
+        + [TeltonikaCurrentSimPinLockBinarySensor(coordinator)]
     )
 
 
@@ -158,3 +159,41 @@ class TeltonikaSimPinLockBinarySensor(
             self.coordinator.data.sim_card_status, self._sim_card_id
         )
         return bool(status) and is_enabled(status.get("pin_lock_enabled"))
+
+
+class TeltonikaCurrentSimPinLockBinarySensor(
+    CoordinatorEntity[TeltonikaDataUpdateCoordinator], BinarySensorEntity
+):
+    """Show PIN-lock protection for the currently active SIM."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "current_sim_pin_lock"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_device_info = coordinator.device_info
+        assert coordinator.config_entry is not None
+        entry_id = (
+            coordinator.config_entry.unique_id or coordinator.config_entry.entry_id
+        )
+        self._attr_unique_id = f"{entry_id}_current_sim_pin_lock"
+
+    @property
+    def _status(self) -> dict[str, Any] | None:
+        config = self.coordinator.active_sim_card
+        if config is None:
+            return None
+        return sim_card_status(
+            self.coordinator.data.sim_card_status, str(config["id"])
+        )
+
+    @property
+    @override
+    def available(self) -> bool:
+        return super().available and self._status is not None
+
+    @property
+    @override
+    def is_on(self) -> bool:
+        return is_enabled((self._status or {}).get("pin_lock_enabled"))

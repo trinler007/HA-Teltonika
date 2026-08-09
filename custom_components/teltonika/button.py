@@ -56,6 +56,12 @@ async def async_setup_entry(
         TeltonikaSmsLimitResetButton(coordinator, sim_card)
         for sim_card in coordinator.data.sim_cards
     )
+    async_add_entities(
+        [
+            TeltonikaCurrentSmsLimitResetButton(coordinator),
+            TeltonikaCurrentDataLimitResetButton(coordinator),
+        ]
+    )
     entry.async_on_unload(coordinator.async_add_listener(_async_add_buttons))
 
 
@@ -155,3 +161,64 @@ class TeltonikaSmsLimitResetButton(
     @override
     async def async_press(self) -> None:
         await self.coordinator.async_clear_sms_limit(self._sim_card_id)
+
+
+class TeltonikaCurrentResetButton(
+    CoordinatorEntity[TeltonikaDataUpdateCoordinator], ButtonEntity
+):
+    """Base class for an active-SIM reset action."""
+
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(
+        self, coordinator: TeltonikaDataUpdateCoordinator, suffix: str
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_device_info = coordinator.device_info
+        assert coordinator.config_entry is not None
+        entry_id = (
+            coordinator.config_entry.unique_id or coordinator.config_entry.entry_id
+        )
+        self._attr_unique_id = f"{entry_id}_current_sim_{suffix}"
+
+
+class TeltonikaCurrentSmsLimitResetButton(TeltonikaCurrentResetButton):
+    """Clear the SMS-limit counter of the active SIM."""
+
+    _attr_translation_key = "current_clear_sms_limit"
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "clear_sms_limit")
+
+    @property
+    @override
+    def available(self) -> bool:
+        return super().available and self.coordinator.active_sim_card is not None
+
+    @override
+    async def async_press(self) -> None:
+        config = self.coordinator.active_sim_card
+        if config is not None:
+            await self.coordinator.async_clear_sms_limit(str(config["id"]))
+
+
+class TeltonikaCurrentDataLimitResetButton(TeltonikaCurrentResetButton):
+    """Clear the data-limit counter of the active SIM."""
+
+    _attr_translation_key = "current_clear_data_limit"
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "clear_data_limit")
+
+    @property
+    @override
+    def available(self) -> bool:
+        _config, status = self.coordinator.active_data_limit
+        return super().available and status is not None
+
+    @override
+    async def async_press(self) -> None:
+        _config, status = self.coordinator.active_data_limit
+        if status is not None and status.get("interface"):
+            await self.coordinator.async_clear_data_limit(str(status["interface"]))

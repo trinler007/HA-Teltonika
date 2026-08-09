@@ -75,6 +75,9 @@
       },
       "sim_pin_lock": {
         "name": "{sim_name} PIN-Sperre aktiviert"
+      },
+      "current_sim_pin_lock": {
+        "name": "Aktuelle SIM PIN-Sperre aktiviert"
       }
     },
     "button": {
@@ -86,11 +89,26 @@
       },
       "clear_sms_limit": {
         "name": "{sim_name} SMS-Limit-Zähler zurücksetzen"
+      },
+      "current_clear_sms_limit": {
+        "name": "SMS-Limit-Zähler der aktuellen SIM zurücksetzen"
+      },
+      "current_clear_data_limit": {
+        "name": "Datenzähler der aktuellen SIM zurücksetzen"
       }
     },
     "number": {
       "sms_limit_count": {
         "name": "{sim_name} SMS-Limit Anzahl"
+      },
+      "current_sms_limit_count": {
+        "name": "Aktuelle SIM SMS-Limit Anzahl"
+      },
+      "current_data_limit_amount": {
+        "name": "Aktuelle SIM Datenlimit"
+      },
+      "current_data_warning_threshold": {
+        "name": "Aktuelle SIM Datenwarnschwelle"
       }
     },
     "device_tracker": {
@@ -129,6 +147,22 @@
           "week": "Woche",
           "month": "Monat"
         }
+      },
+      "current_sms_limit_period": {
+        "name": "Aktuelle SIM SMS-Limit-Zeitraum",
+        "state": {"day": "Tag", "week": "Woche", "month": "Monat"}
+      },
+      "current_data_limit_period": {
+        "name": "Aktuelle SIM Datenlimit-Zeitraum",
+        "state": {"day": "Tag", "week": "Woche", "month": "Monat"}
+      },
+      "current_data_limit_reset": {
+        "name": "Aktuelle SIM Datenlimit-Reset",
+        "state": {
+          "monday": "Montag", "tuesday": "Dienstag", "wednesday": "Mittwoch",
+          "thursday": "Donnerstag", "friday": "Freitag", "saturday": "Samstag",
+          "sunday": "Sonntag"
+        }
       }
     },
     "switch": {
@@ -140,6 +174,23 @@
       },
       "sms_limit": {
         "name": "{sim_name} SMS-Limit"
+      },
+      "current_data_roaming": {
+        "name": "Aktuelle SIM Datenroaming erlaubt"
+      },
+      "current_sms_limit": {
+        "name": "Aktuelle SIM SMS-Limit"
+      },
+      "current_data_limit": {
+        "name": "Aktuelle SIM Datenlimit"
+      },
+      "current_data_warning": {
+        "name": "Aktuelle SIM Datenwarnung"
+      }
+    },
+    "text": {
+      "current_data_warning_phone": {
+        "name": "Aktuelle SIM Telefonnummer für Datenwarnung"
       }
     },
     "sensor": {
@@ -301,6 +352,27 @@
       },
       "sms_limit_next_reset": {
         "name": "{sim_name} Nächster SMS-Limit-Reset"
+      },
+      "current_sms_sent": {
+        "name": "Aktuelle SIM SMS gesendet"
+      },
+      "current_sms_remaining": {
+        "name": "Aktuelle SIM SMS verbleibend"
+      },
+      "current_sms_limit_next_reset": {
+        "name": "Aktuelle SIM nächster SMS-Limit-Reset"
+      },
+      "current_data_limit_used": {
+        "name": "Aktuelle SIM Daten verbraucht"
+      },
+      "current_data_limit_remaining": {
+        "name": "Aktuelle SIM Daten verbleibend"
+      },
+      "current_data_limit_used_percentage": {
+        "name": "Aktuelle SIM Datenlimit verbraucht"
+      },
+      "current_data_limit_next_reset": {
+        "name": "Aktuelle SIM nächster Datenlimit-Reset"
       }
     }
   }

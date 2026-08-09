@@ -31,6 +31,7 @@ PLATFORMS = [
     Platform.SELECT,
     Platform.SENSOR,
     Platform.SWITCH,
+    Platform.TEXT,
 ]
 
 TeltonikaConfigEntry = ConfigEntry[TeltonikaDataUpdateCoordinator]

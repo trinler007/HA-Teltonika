@@ -250,6 +250,35 @@ bewusst benutzerfreundlich ab: **Ein** erlaubt Datenroaming (`deny_roaming=0`),
 RutOS nur geliefert, wenn für die jeweilige SIM ein SMS-Limit aktiv ist; die
 entsprechenden Diagnosesensoren sind andernfalls nicht verfügbar.
 
+Zusätzlich legt die Integration Proxy-Entitäten für die **aktuell aktive SIM**
+an. Sie folgen SIM 1, SIM 2 oder dem aktiven eSIM-Profil automatisch und eignen
+sich dadurch besonders für ein kompaktes Dashboard. Verfügbar sind PIN-Status,
+Datenroaming, SMS-Limit mit Anzahl, Zeitraum, Zählerständen und Reset sowie die
+zugehörigen Reset-Buttons.
+
+## Datenlimit der aktuellen SIM
+
+Über `/api/data_limit/config` und `/api/data_limit/status` verwaltet die
+Integration außerdem das Datenlimit des zur aktiven SIM gehörenden
+Mobilfunkinterfaces. Für SIM 1 und SIM 2 sind dies üblicherweise
+`mob1s1a1` und `mob1s2a1`; eSIM-Profile werden anhand ihres tatsächlichen
+Runtime-Interfaces wie `mob1s3a1e2` zugeordnet. Dabei wird auch die besondere
+RutOS-Zuordnung berücksichtigt, bei der die Konfigurations-ID eines Profils
+beispielsweise `wan3` lautet.
+
+Die Proxy-Entitäten bieten:
+
+- Datenlimit und Warnschwelle in MB
+- Zeitraum Tag, Woche oder Monat
+- passend dazu Reset-Stunde, Wochentag oder Monatstag
+- SMS-Warnung und deren Telefonnummer
+- verbrauchtes und verbleibendes Volumen, Prozentwert und nächsten Reset
+- Button zum Zurücksetzen des aktuellen Datenzählers
+
+Die Warnschwelle wird entsprechend der RutOS-API in MB konfiguriert. Das
+optionale Drosseln der Up- und Downloadrate nach Erreichen des Limits ist
+bewusst nicht implementiert.
+
 ## SMS senden und empfangen
 
 Für jedes Modem erzeugt die Integration eine `notify`-Entität zum Versand
@@ -398,6 +427,41 @@ cards:
 
 Bei RUTX50-eSIM-Hardware kann eine weitere Tile Card für die erzeugte
 `select.*_active_esim_profile`-Entität ergänzt werden.
+
+Die vier wichtigsten Schalter lassen sich ohne übergroße Einzelbuttons in
+einem Raster anordnen. Die Entity IDs sind Beispiele und müssen an die eigene
+Installation angepasst werden:
+
+```yaml
+type: grid
+columns: 4
+square: false
+cards:
+  - type: tile
+    entity: switch.rutx50_internal_modem_flight_mode
+    name: Flug
+    vertical: true
+    tap_action:
+      action: toggle
+  - type: tile
+    entity: switch.rutx50_current_sim_data_roaming
+    name: Roaming
+    vertical: true
+    tap_action:
+      action: toggle
+  - type: tile
+    entity: switch.rutx50_current_sim_sms_limit
+    name: SMS
+    vertical: true
+    tap_action:
+      action: toggle
+  - type: tile
+    entity: switch.rutx50_current_sim_data_limit
+    name: Daten
+    vertical: true
+    tap_action:
+      action: toggle
+```
 
 ## Quellen, Herkunft und Markenrechte
 

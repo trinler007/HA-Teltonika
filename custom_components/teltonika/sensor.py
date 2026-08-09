@@ -298,6 +298,17 @@ async def async_setup_entry(
                 )
             )
             entities.extend(
+                (
+                    TeltonikaCurrentSmsSentSensor(coordinator),
+                    TeltonikaCurrentSmsRemainingSensor(coordinator),
+                    TeltonikaCurrentSmsResetSensor(coordinator),
+                    TeltonikaCurrentDataUsedSensor(coordinator),
+                    TeltonikaCurrentDataRemainingSensor(coordinator),
+                    TeltonikaCurrentDataUsedPercentageSensor(coordinator),
+                    TeltonikaCurrentDataResetSensor(coordinator),
+                )
+            )
+            entities.extend(
                 TeltonikaTransferRateSensor(
                     coordinator, rate_key, translation_key, interface_group
                 )
@@ -1090,4 +1101,220 @@ class TeltonikaSmsLimitResetSensor(TeltonikaSimStatusSensor):
     @override
     def native_value(self) -> datetime | None:
         timestamp = as_int((self.status or {}).get("sms_due_reset_time"))
+        return dt_util.utc_from_timestamp(timestamp) if timestamp is not None else None
+
+
+class TeltonikaCurrentSimSensor(TeltonikaBaseSensor):
+    """Base class for a diagnostic sensor routed to the active SIM."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(
+        self, coordinator: TeltonikaDataUpdateCoordinator, suffix: str
+    ) -> None:
+        super().__init__(coordinator, f"current_sim_{suffix}")
+
+    @property
+    def sms_status(self) -> dict[str, Any] | None:
+        config = self.coordinator.active_sim_card
+        if config is None:
+            return None
+        return sim_card_status(
+            self.coordinator.data.sim_card_status, str(config["id"])
+        )
+
+    @property
+    def data_status(self) -> dict[str, Any] | None:
+        _config, status = self.coordinator.active_data_limit
+        return status
+
+
+class TeltonikaCurrentSmsSentSensor(TeltonikaCurrentSimSensor):
+    """Show sent SMS in the active SIM limit period."""
+
+    _attr_translation_key = "current_sms_sent"
+    _attr_state_class = SensorStateClass.TOTAL
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "sms_sent")
+
+    @property
+    @override
+    def available(self) -> bool:
+        return super().available and "sms_sent" in (self.sms_status or {})
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        return as_int((self.sms_status or {}).get("sms_sent"))
+
+
+class TeltonikaCurrentSmsRemainingSensor(TeltonikaCurrentSimSensor):
+    """Show remaining SMS for the active SIM."""
+
+    _attr_translation_key = "current_sms_remaining"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "sms_remaining")
+
+    @property
+    @override
+    def available(self) -> bool:
+        status = self.sms_status or {}
+        return (
+            super().available
+            and as_int(status.get("sms_limit")) is not None
+            and as_int(status.get("sms_sent")) is not None
+        )
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        status = self.sms_status or {}
+        limit = as_int(status.get("sms_limit"))
+        sent = as_int(status.get("sms_sent"))
+        return max(0, limit - sent) if limit is not None and sent is not None else None
+
+
+class TeltonikaCurrentSmsResetSensor(TeltonikaCurrentSimSensor):
+    """Show the next active SIM SMS-limit reset."""
+
+    _attr_translation_key = "current_sms_limit_next_reset"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "sms_limit_next_reset")
+
+    @property
+    @override
+    def available(self) -> bool:
+        return (
+            super().available
+            and as_int((self.sms_status or {}).get("sms_due_reset_time")) is not None
+        )
+
+    @property
+    @override
+    def native_value(self) -> datetime | None:
+        timestamp = as_int((self.sms_status or {}).get("sms_due_reset_time"))
+        return dt_util.utc_from_timestamp(timestamp) if timestamp is not None else None
+
+
+class TeltonikaCurrentDataSensor(TeltonikaCurrentSimSensor):
+    """Base class for active SIM data-limit usage sensors."""
+
+    _attr_native_unit_of_measurement = UnitOfInformation.MEGABYTES
+    _attr_suggested_unit_of_measurement = UnitOfInformation.GIGABYTES
+    _attr_suggested_display_precision = 2
+
+    @property
+    @override
+    def available(self) -> bool:
+        status = self.data_status or {}
+        return super().available and as_int(status.get("data_used")) is not None
+
+
+class TeltonikaCurrentDataUsedSensor(TeltonikaCurrentDataSensor):
+    """Show used data in the active data-limit period."""
+
+    _attr_translation_key = "current_data_limit_used"
+    _attr_device_class = SensorDeviceClass.DATA_SIZE
+    _attr_state_class = SensorStateClass.TOTAL
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "data_limit_used")
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        used = as_int((self.data_status or {}).get("data_used"))
+        return used / 1048576 if used is not None else None
+
+
+class TeltonikaCurrentDataRemainingSensor(TeltonikaCurrentDataSensor):
+    """Show remaining data before the active SIM limit is reached."""
+
+    _attr_translation_key = "current_data_limit_remaining"
+    _attr_device_class = SensorDeviceClass.DATA_SIZE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "data_limit_remaining")
+
+    @property
+    @override
+    def available(self) -> bool:
+        status = self.data_status or {}
+        return (
+            super().available
+            and as_int(status.get("data_limit")) is not None
+        )
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        status = self.data_status or {}
+        used = as_int(status.get("data_used"))
+        limit = as_int(status.get("data_limit"))
+        if used is None or limit is None:
+            return None
+        return max(0, limit - used) / 1048576
+
+
+class TeltonikaCurrentDataUsedPercentageSensor(TeltonikaCurrentSimSensor):
+    """Show active SIM data-limit usage as a percentage."""
+
+    _attr_translation_key = "current_data_limit_used_percentage"
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 1
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "data_limit_used_percentage")
+
+    @property
+    @override
+    def available(self) -> bool:
+        status = self.data_status or {}
+        limit = as_int(status.get("data_limit"))
+        return (
+            super().available
+            and as_int(status.get("data_used")) is not None
+            and limit is not None
+            and limit > 0
+        )
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        status = self.data_status or {}
+        used = as_int(status.get("data_used"))
+        limit = as_int(status.get("data_limit"))
+        if used is None or limit is None or limit <= 0:
+            return None
+        return used / limit * 100
+
+
+class TeltonikaCurrentDataResetSensor(TeltonikaCurrentSimSensor):
+    """Show the next automatic active SIM data-limit reset."""
+
+    _attr_translation_key = "current_data_limit_next_reset"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(self, coordinator: TeltonikaDataUpdateCoordinator) -> None:
+        super().__init__(coordinator, "data_limit_next_reset")
+
+    @property
+    @override
+    def available(self) -> bool:
+        return (
+            super().available
+            and as_int((self.data_status or {}).get("due_reset_time")) is not None
+        )
+
+    @property
+    @override
+    def native_value(self) -> datetime | None:
+        timestamp = as_int((self.data_status or {}).get("due_reset_time"))
         return dt_util.utc_from_timestamp(timestamp) if timestamp is not None else None
