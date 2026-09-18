@@ -45,6 +45,7 @@ from .helpers import (
     is_enabled,
     is_esim_sim_card,
     modem_sim_switch_complete,
+    parse_system_device_status,
     reverse_geocode_location_name,
     supports_sim_switch,
 )
@@ -431,37 +432,40 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
     async def _async_setup(self) -> None:
         """Authenticate and fetch device information."""
         try:
-            await self.client.get_device_info()
-            system_info_response = await self.client.get_system_info()
+            device_status = await self._async_optional_data("system/device/status")
         except TeltonikaAuthenticationError as err:
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
-        except TeltonikaConnectionError as err:
-            raise ConfigEntryNotReady(f"Failed to connect to device: {err}") from err
+
+        if not isinstance(device_status, dict):
+            raise ConfigEntryNotReady(
+                "Could not retrieve system/device/status from the device"
+            )
+
+        system_info = parse_system_device_status(device_status)
+        if system_info.serial is None:
+            raise ConfigEntryNotReady(
+                "Device did not provide a serial number in system/device/status"
+            )
 
         self.device_info = DeviceInfo(
-            identifiers={(DOMAIN, system_info_response.mnf_info.serial)},
+            identifiers={(DOMAIN, system_info.serial)},
             connections={
                 (CONNECTION_NETWORK_MAC, mac)
                 for mac in (
-                    system_info_response.mnf_info.mac_eth,
-                    system_info_response.mnf_info.mac,
+                    system_info.mac_eth,
+                    system_info.mac,
                 )
                 if mac
             },
-            name=system_info_response.static.device_name,
+            name=system_info.device_name or system_info.model or system_info.serial,
             manufacturer="Teltonika",
-            model=system_info_response.static.model,
-            sw_version=system_info_response.static.fw_version,
-            serial_number=system_info_response.mnf_info.serial,
+            model=system_info.model,
+            sw_version=system_info.fw_version,
+            serial_number=system_info.serial,
             configuration_url=self.base_url,
         )
-        self.firmware_version = system_info_response.static.fw_version
-        device_status = await self._async_optional_data("system/device/status")
-        if isinstance(device_status, dict):
-            board = device_status.get("board")
-            hwinfo = board.get("hwinfo") if isinstance(board, dict) else None
-            if isinstance(hwinfo, dict):
-                self.esim_supported = is_enabled(hwinfo.get("esim"))
+        self.firmware_version = system_info.fw_version
+        self.esim_supported = is_enabled(system_info.esim)
 
     async def _async_optional_data(
         self,

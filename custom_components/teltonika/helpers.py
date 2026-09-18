@@ -12,6 +12,67 @@ EARTH_RADIUS_KM = 6371.0088
 
 
 @dataclass(frozen=True)
+class SystemDeviceStatusInfo:
+    """Fields used from the RutOS system/device/status response."""
+
+    serial: str | None = None
+    mac_eth: str | None = None
+    mac: str | None = None
+    device_name: str | None = None
+    model: str | None = None
+    fw_version: str | None = None
+    esim: Any = None
+
+
+def _optional_text(value: Any) -> str | None:
+    """Return a non-empty value as text."""
+    if value is None:
+        return None
+
+    text = str(value).strip()
+    return text or None
+
+
+def parse_system_device_status(value: Any) -> SystemDeviceStatusInfo:
+    """Extract integration fields from a raw system/device/status response.
+
+    RutOS devices and firmware versions expose slightly different response
+    schemas. Parse only the fields used by the integration so unrelated
+    optional fields cannot prevent setup.
+    """
+    if not isinstance(value, dict):
+        return SystemDeviceStatusInfo()
+
+    static = value.get("static")
+    if not isinstance(static, dict):
+        static = {}
+
+    mnf_info = value.get("mnfinfo")
+    if not isinstance(mnf_info, dict):
+        mnf_info = value.get("mnf_info")
+    if not isinstance(mnf_info, dict):
+        mnf_info = {}
+
+    board = value.get("board")
+    if not isinstance(board, dict):
+        board = {}
+
+    hwinfo = board.get("hwinfo")
+    if not isinstance(hwinfo, dict):
+        hwinfo = {}
+
+    return SystemDeviceStatusInfo(
+        serial=_optional_text(mnf_info.get("serial")),
+        mac_eth=_optional_text(mnf_info.get("mac_eth")),
+        mac=_optional_text(mnf_info.get("mac")),
+        device_name=_optional_text(static.get("device_name")),
+        model=_optional_text(static.get("model")),
+        fw_version=_optional_text(static.get("fw_version")),
+        esim=hwinfo.get("esim"),
+    )
+
+
+@dataclass(frozen=True)
 class MobileConnectionAssessment:
     """Calculated cellular quality and plausible peak capacity."""
 

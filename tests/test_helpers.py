@@ -30,6 +30,68 @@ class ConversionTests(unittest.TestCase):
         self.assertIsNone(HELPERS.as_int(None))
 
 
+class SystemDeviceStatusTests(unittest.TestCase):
+    """Test tolerant parsing of RutOS system/device/status responses."""
+
+    def test_missing_static_release_is_supported(self) -> None:
+        """RutOS may omit static.release on some firmware versions."""
+        payload = {
+            "static": {
+                "device_name": "gw01",
+                "model": "RUTX50",
+                "fw_version": "RUTX_R_00.07.18.3",
+                "system": "ARMv7 Processor rev 5",
+                "cpu_count": 4,
+            },
+            "mnfinfo": {
+                "serial": "1234567890",
+                "mac_eth": "00:11:22:33:44:55",
+                "mac": "00:11:22:33:44:66",
+            },
+            "board": {"hwinfo": {"esim": True}},
+        }
+
+        result = HELPERS.parse_system_device_status(payload)
+
+        self.assertEqual(result.serial, "1234567890")
+        self.assertEqual(result.device_name, "gw01")
+        self.assertEqual(result.model, "RUTX50")
+        self.assertEqual(result.fw_version, "RUTX_R_00.07.18.3")
+        self.assertEqual(result.mac_eth, "00:11:22:33:44:55")
+        self.assertEqual(result.mac, "00:11:22:33:44:66")
+        self.assertTrue(result.esim)
+
+    def test_missing_optional_sections_are_supported(self) -> None:
+        """Missing optional sections must not break parsing."""
+        payload = {
+            "static": {"device_name": "gw01", "model": "RUT241"},
+            "mnfinfo": {"serial": "9876543210"},
+        }
+
+        result = HELPERS.parse_system_device_status(payload)
+
+        self.assertEqual(result.serial, "9876543210")
+        self.assertEqual(result.device_name, "gw01")
+        self.assertEqual(result.model, "RUT241")
+        self.assertIsNone(result.fw_version)
+        self.assertIsNone(result.mac_eth)
+        self.assertIsNone(result.esim)
+
+    def test_mnf_info_alias_and_non_mapping_sections_are_supported(self) -> None:
+        """Tolerate alternate naming and malformed optional sections."""
+        payload = {
+            "static": None,
+            "mnf_info": {"serial": " ABC123 "},
+            "board": {"hwinfo": []},
+        }
+
+        result = HELPERS.parse_system_device_status(payload)
+
+        self.assertEqual(result.serial, "ABC123")
+        self.assertIsNone(result.device_name)
+        self.assertIsNone(result.esim)
+
+
 class MobileConnectionAssessmentTests(unittest.TestCase):
     """Test radio quality and capacity estimation."""
 

@@ -33,6 +33,7 @@ from .const import (
     DEFAULT_REVERSE_GEOCODING_URL,
     DOMAIN,
 )
+from .helpers import parse_system_device_status
 from .util import get_url_variants
 
 _LOGGER = logging.getLogger(__name__)
@@ -79,8 +80,12 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
             auth_valid = await client.validate_credentials()
             device_id = device_info.device_identifier
             if auth_valid and device_id is None:
-                system_info = await client.get_system_info()
-                device_id = system_info.mnf_info.serial
+                response = await client.auth.request_json(
+                    "GET", "system/device/status"
+                )
+                if isinstance(response, dict) and response.get("success"):
+                    system_info = parse_system_device_status(response.get("data"))
+                    device_id = system_info.serial
         except TeltonikaConnectionError as err:
             _LOGGER.debug(
                 "Failed to connect to Teltonika device at %s: %s", base_url, err
@@ -95,6 +100,10 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
 
         if not auth_valid:
             raise InvalidAuth
+        if device_id is None:
+            raise CannotConnect(
+                "Device did not provide a stable device identifier"
+            )
 
         return {
             "title": device_info.device_name,
