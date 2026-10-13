@@ -83,6 +83,68 @@ class MobileConnectionAssessmentTests(unittest.TestCase):
         self.assertLessEqual(len(description), 255)
         self.assertLessEqual(len(HELPERS.describe_mobile_connection(result, "en")), 255)
 
+        self.assertEqual(
+            HELPERS.describe_mobile_connection_brief(result, "de-DE"),
+            "5G NSA: sehr gut, 4 von 4 Balken im Heimatnetz.",
+        )
+
+    def test_brief_description_reports_roaming_and_near_limits(self) -> None:
+        modem = SimpleNamespace(
+            conntype="5G (NSA)",
+            data_conn_state="Connected",
+            operator_state="Registered, roaming",
+            rsrp=-95,
+            rsrq=-10,
+            sinr=10,
+            rssi=-75,
+            ca_signal=[],
+            cell_info=[],
+            band="LTE B3",
+        )
+        result = HELPERS.assess_mobile_connection(modem)
+
+        description = HELPERS.describe_mobile_connection_brief(
+            result,
+            "de-DE",
+            roaming=True,
+            sms_limit=10,
+            sms_sent=8,
+            data_limit_bytes=100 * 1048576,
+            data_used_bytes=75 * 1048576,
+            data_warning_bytes=70 * 1048576,
+        )
+
+        self.assertIn("im Roamingnetz", description)
+        self.assertIn("SMS-Limit fast erreicht", description)
+        self.assertIn("Datenlimit fast erreicht", description)
+
+    def test_brief_description_reports_reached_limits(self) -> None:
+        modem = SimpleNamespace(
+            conntype="4G LTE",
+            data_conn_state="Connected",
+            operator_state="Registered, home",
+            rsrp=-100,
+            rsrq=-12,
+            sinr=5,
+            rssi=-85,
+            ca_signal=[],
+            cell_info=[],
+            band="LTE B20",
+        )
+        result = HELPERS.assess_mobile_connection(modem)
+        description = HELPERS.describe_mobile_connection_brief(
+            result,
+            "en",
+            sms_limit=10,
+            sms_sent=10,
+            data_limit_bytes=100,
+            data_used_bytes=100,
+        )
+
+        self.assertIn("on the home network", description)
+        self.assertIn("SMS limit reached", description)
+        self.assertIn("data limit reached", description)
+
     def test_disconnected_modem_has_no_capacity(self) -> None:
         modem = SimpleNamespace(
             conntype="LTE",
@@ -102,6 +164,10 @@ class MobileConnectionAssessmentTests(unittest.TestCase):
         self.assertEqual(
             HELPERS.describe_mobile_connection(result, "en"),
             "The cellular connection is currently disconnected.",
+        )
+        self.assertEqual(
+            HELPERS.describe_mobile_connection_brief(result, "de-DE"),
+            "Mobilfunk: nicht verbunden, 0 von 4 Balken.",
         )
 
     def test_single_lte_carrier_uses_serving_cell_bandwidth(self) -> None:

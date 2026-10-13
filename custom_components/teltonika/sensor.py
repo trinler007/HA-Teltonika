@@ -38,13 +38,17 @@ from .const import CONF_HOME_LATITUDE, CONF_HOME_LONGITUDE
 from .coordinator import TeltonikaDataUpdateCoordinator
 from .helpers import (
     MobileConnectionAssessment,
+    active_sim_card_configuration,
     as_float,
     as_int,
     assess_mobile_connection,
     compass_direction,
     describe_mobile_connection,
+    describe_mobile_connection_brief,
+    data_limit_for_sim_card,
     distance_km,
     interface_ip_address,
+    is_enabled,
     maidenhead_locator,
     sim_card_name,
     sim_card_status,
@@ -275,6 +279,7 @@ async def async_setup_entry(
             for entity in (
                 TeltonikaEstimatedCapacitySensor(coordinator, modem_id),
                 TeltonikaConnectionDescriptionSensor(coordinator, modem_id),
+                TeltonikaBriefConnectionDescriptionSensor(coordinator, modem_id),
                 TeltonikaSignalQualityBarsSensor(coordinator, modem_id),
             )
         )
@@ -507,6 +512,76 @@ class TeltonikaConnectionDescriptionSensor(TeltonikaModemAssessmentSensor):
         """Return a localized, concise description of the mobile connection."""
         return describe_mobile_connection(
             self.assessment, self.coordinator.hass.config.language
+        )
+
+
+class TeltonikaBriefConnectionDescriptionSensor(TeltonikaModemAssessmentSensor):
+    """Short voice-assistant-friendly cellular connection summary."""
+
+    _attr_translation_key = "connection_quality_brief"
+
+    def __init__(
+        self, coordinator: TeltonikaDataUpdateCoordinator, modem_id: str
+    ) -> None:
+        """Initialize the brief connection summary sensor."""
+        super().__init__(coordinator, modem_id, "connection_quality_brief")
+
+    @property
+    @override
+    def native_value(self) -> StateType:
+        """Return technology, quality, bars, network and relevant warnings."""
+        modem = self.coordinator.data.modems[self._modem_id]
+        sim_config = active_sim_card_configuration(
+            self.coordinator.data.sim_cards, modem
+        )
+        sms_status = (
+            sim_card_status(
+                self.coordinator.data.sim_card_status, str(sim_config["id"])
+            )
+            if sim_config
+            else None
+        ) or {}
+        data_config, data_status = (
+            data_limit_for_sim_card(
+                self.coordinator.data.data_limit_configs,
+                self.coordinator.data.data_limit_status,
+                sim_config,
+            )
+            if sim_config
+            else (None, None)
+        )
+        data_config = data_config or {}
+        data_status = data_status or {}
+        sms_enabled = is_enabled(
+            (sim_config or {}).get("enable_sms_limit")
+        ) or is_enabled(sms_status.get("sms_limit_enabled"))
+        data_enabled = is_enabled(data_config.get("enabled")) or is_enabled(
+            data_status.get("enabled")
+        )
+        warning_enabled = is_enabled(data_config.get("enable_warning"))
+        warning_mb = as_int(data_config.get("warning_limit"))
+        operator_state = str(
+            getattr(modem, "operator_state", None)
+            or getattr(modem, "netstate", None)
+            or ""
+        ).lower()
+        return describe_mobile_connection_brief(
+            self.assessment,
+            self.coordinator.hass.config.language,
+            roaming="roaming" in operator_state,
+            sms_limit=as_int(sms_status.get("sms_limit")) if sms_enabled else None,
+            sms_sent=as_int(sms_status.get("sms_sent")) if sms_enabled else None,
+            data_limit_bytes=(
+                as_int(data_status.get("data_limit")) if data_enabled else None
+            ),
+            data_used_bytes=(
+                as_int(data_status.get("data_used")) if data_enabled else None
+            ),
+            data_warning_bytes=(
+                warning_mb * 1048576
+                if warning_enabled and warning_mb is not None
+                else None
+            ),
         )
 
 

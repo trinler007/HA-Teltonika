@@ -215,6 +215,9 @@
       "connection_quality_description": {
         "name": "{modem_name} Connection quality description"
       },
+      "connection_quality_brief": {
+        "name": "{modem_name} Brief connection quality"
+      },
       "estimated_download_capacity": {
         "name": "{modem_name} Estimated download capacity"
       },
