@@ -122,6 +122,13 @@ werden dabei jeweils mit Messwert und Einzelbewertung genannt, statt nur den
 schwächsten Faktor allgemein zu beschreiben. Der Sensor eignet sich damit
 beispielsweise als Antwort eines Sprachassistenten.
 
+Der zusätzliche Sensor **Verbindungsqualität kurz** ist auf besonders knappe
+Sprachausgaben ausgelegt, zum Beispiel: „5G NSA: gut, 3 von 4 Balken im
+Heimatnetz.“ Er nennt nur Technologie, Gesamtgüte, Signalbalken und
+Heimat-/Roamingnetz. Ab 80 Prozent eines aktivierten SMS- oder Datenlimits wird
+„fast erreicht“ ergänzt; bei einem bereits ausgeschöpften Limit „erreicht“.
+Eine früher eingestellte Daten-Warnschwelle wird ebenfalls berücksichtigt.
+
 Der Sensor **Signalqualität Balken** bildet die Gesamtbewertung wie eine
 Mobilfunkanzeige auf Werte von 0 bis 4 ab. 1 Balken entspricht 0 bis
 24 Prozent, 2 Balken 25 bis 49 Prozent, 3 Balken 50 bis 74 Prozent und
