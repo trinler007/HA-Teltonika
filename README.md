@@ -502,6 +502,12 @@ Logos von Teltonika eingeräumt.
 Die API-Felder wurden gegen RutOS 7.24.1 / Web API v1.16.1 entwickelt. Ältere
 Firmware kann weniger Entitäten bereitstellen.
 
+Ein langsamer oder vorübergehend nicht erreichbarer Endpunkt
+`/api/system/device/status` verhindert den Start der Integration nicht. In
+diesem Fall wird die beim Einrichten gespeicherte Geräte-ID verwendet. Modell,
+Firmwareversion und eSIM-Hardwarestatus können bis zum nächsten erfolgreichen
+Neuladen unbekannt bleiben; die übrigen Routerentitäten werden weiter geladen.
+
 ## Entwicklung
 
 Die Upstream-Basis und das Verfahren zum Übernehmen neuer Core-Änderungen sind
