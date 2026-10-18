@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, override
 
 from aiohttp import ClientError
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC, DeviceInfo
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -436,19 +436,28 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         except TeltonikaAuthenticationError as err:
             raise ConfigEntryAuthFailed(f"Authentication failed: {err}") from err
 
-        if not isinstance(device_status, dict):
-            raise ConfigEntryNotReady(
-                "Could not retrieve system/device/status from the device"
-            )
-
         system_info = parse_system_device_status(device_status)
-        if system_info.serial is None:
-            raise ConfigEntryNotReady(
-                "Device did not provide a serial number in system/device/status"
+        assert self.config_entry is not None
+        stable_identifier = (
+            system_info.serial
+            or self.config_entry.unique_id
+            or self.config_entry.entry_id
+        )
+        if not isinstance(device_status, dict):
+            _LOGGER.warning(
+                "system/device/status was unavailable during setup; using the "
+                "stored config entry identity for %s",
+                self.config_entry.title,
+            )
+        elif system_info.serial is None:
+            _LOGGER.warning(
+                "system/device/status did not contain a serial number; using the "
+                "stored config entry identity for %s",
+                self.config_entry.title,
             )
 
         self.device_info = DeviceInfo(
-            identifiers={(DOMAIN, system_info.serial)},
+            identifiers={(DOMAIN, stable_identifier)},
             connections={
                 (CONNECTION_NETWORK_MAC, mac)
                 for mac in (
@@ -457,7 +466,12 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
                 )
                 if mac
             },
-            name=system_info.device_name or system_info.model or system_info.serial,
+            name=(
+                system_info.device_name
+                or system_info.model
+                or self.config_entry.title
+                or stable_identifier
+            ),
             manufacturer="Teltonika",
             model=system_info.model,
             sw_version=system_info.fw_version,

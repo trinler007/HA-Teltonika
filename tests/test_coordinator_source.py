@@ -91,6 +91,33 @@ class CoordinatorSchedulingTests(unittest.TestCase):
         self.assertIn("_async_optional_data", method_calls)
         self.assertIn("system/device/status", string_constants)
 
+    def test_device_status_timeout_does_not_abort_setup(self) -> None:
+        """An optional device-status timeout must not block the integration."""
+        tree = ast.parse(COORDINATOR_PATH.read_text(encoding="utf-8"))
+        function = next(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.AsyncFunctionDef)
+            and node.name == "_async_setup"
+        )
+
+        raised_names = {
+            node.exc.func.id
+            for node in ast.walk(function)
+            if isinstance(node, ast.Raise)
+            and isinstance(node.exc, ast.Call)
+            and isinstance(node.exc.func, ast.Name)
+        }
+        attributes = {
+            node.attr
+            for node in ast.walk(function)
+            if isinstance(node, ast.Attribute)
+        }
+
+        self.assertNotIn("ConfigEntryNotReady", raised_names)
+        self.assertIn("unique_id", attributes)
+        self.assertIn("entry_id", attributes)
+
     def test_config_flow_does_not_use_strict_system_info_model(self) -> None:
         """Guard config flow fallback against RutOS response-schema differences."""
         tree = ast.parse(CONFIG_FLOW_PATH.read_text(encoding="utf-8"))
