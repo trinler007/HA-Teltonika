@@ -66,6 +66,35 @@ class CoordinatorSchedulingTests(unittest.TestCase):
             )
         )
 
+    def test_geocoding_position_is_cached_only_after_success(self) -> None:
+        """A failed lookup must remain eligible for a later retry."""
+        tree = ast.parse(COORDINATOR_PATH.read_text(encoding="utf-8"))
+        function = next(
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.AsyncFunctionDef)
+            and node.name == "_async_update_location_name"
+        )
+        coordinate_assignment = next(
+            node
+            for node in ast.walk(function)
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Attribute)
+                and target.attr == "_geocoding_coordinates"
+                for target in node.targets
+            )
+        )
+        response_json_call = next(
+            node
+            for node in ast.walk(function)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "json"
+        )
+
+        self.assertGreater(coordinate_assignment.lineno, response_json_call.lineno)
+
     def test_setup_does_not_use_strict_system_info_model(self) -> None:
         """Guard startup against RutOS response-schema differences."""
         tree = ast.parse(COORDINATOR_PATH.read_text(encoding="utf-8"))

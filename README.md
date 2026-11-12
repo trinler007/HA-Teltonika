@@ -389,6 +389,11 @@ Stadt, Ort oder Gemeinde und fällt für dünn besiedelte Regionen auf Landkreis
 Region oder Land zurück. Der vollständige Anzeigename, das Land und die
 OpenStreetMap-Attribution stehen als Attribute zur Verfügung.
 
+Schlägt eine Abfrage vorübergehend fehl, bleibt ein bereits bekannter Ortsname
+erhalten. Ist noch kein Ortsname vorhanden, versucht die Integration die
+Abfrage nach 15 Minuten erneut. Fehlgeschlagene Abfragen werden nicht mehr als
+erfolgreich bearbeitete Position gespeichert.
+
 Bei Aktivierung werden GPS-Koordinaten an den eingestellten Dienst übertragen.
 Für den öffentlichen Standarddienst gelten die
 [Nominatim Usage Policy](https://operations.osmfoundation.org/policies/nominatim/)

@@ -387,7 +387,6 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
                     return
 
         self._geocoding_last_attempt = monotonic()
-        self._geocoding_coordinates = (latitude, longitude)
         assert self.config_entry is not None
         endpoint = str(
             self.config_entry.options.get(
@@ -420,7 +419,13 @@ class TeltonikaDataUpdateCoordinator(DataUpdateCoordinator[TeltonikaData]):
         address = payload.get("address")
         if not isinstance(address, dict):
             address = {}
-        self._location_name = reverse_geocode_location_name(payload)
+        location_name = reverse_geocode_location_name(payload)
+        if location_name is None:
+            _LOGGER.debug("Reverse geocoding returned no usable place name")
+            return
+
+        self._location_name = location_name
+        self._geocoding_coordinates = (latitude, longitude)
         self._location_details = {
             "display_name": payload.get("display_name"),
             "country_code": address.get("country_code"),
